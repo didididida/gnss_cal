@@ -13,10 +13,10 @@
 #include <thread>
 #include <ros/callback_queue.h>
 #include <mutex>
-
+#include "gnss_cal/gnssCal.h"
+#include "gnss_cal/gnssToU.h"
 
 std::mutex iono_mu; //mutex for ionosphere
-std::mutex ephem_mu; //mutex for ephemris (both glonass and others)
 std::mutex pos_mu;
 
 std::unordered_map<uint32_t,std::vector<gnss_comm::EphemBasePtr>>sat2ephem;//ephemris map
@@ -26,14 +26,18 @@ Eigen::Vector3d pos_ecef;
 //used in particle filter
 std::unordered_map<int,std::pair<Eigen::Vector3d,double>>ref_map;
 
+ros::Publisher pub;
+
 void inputEphem(gnss_comm::EphemBasePtr ephem_ptr){
     //tansform into second
     double toe = gnss_comm::time2sec(ephem_ptr->toe);
     //if there is a new ephemris
     if(sat2time_index.count(ephem_ptr->sat)==0||sat2time_index.at(ephem_ptr->sat).count(toe)==0){
+      
         sat2ephem[ephem_ptr->sat].emplace_back(ephem_ptr);
         // the newest index of ephemris
         sat2time_index[ephem_ptr->sat].emplace(toe, sat2ephem.at(ephem_ptr->sat).size()-1);
+       
     }
 }
 
@@ -64,19 +68,27 @@ void ionoparam_cb(const gnss_comm::StampedFloat64ArrayConstPtr &ionoparam_msg){
 void inputIonoParam(double ts,std::vector<double>&iono_param){
   
     if(iono_param.size()!=8)return;
+    iono_mu.lock();
     last_iono_param.clear();
     std::copy(iono_param.begin(),iono_param.end(),std::back_inserter(last_iono_param));
+    iono_mu.unlock();
 }
 
 void reclla_cb(const sensor_msgs::NavSatFixConstPtr &recmsg){
+     pos_mu.lock();
      pos_ecef = {recmsg->latitude,recmsg->longitude,recmsg->altitude};
+     pos_mu.unlock();
 }
 
 void rangemeas_cb(const gnss_comm::GnssMeasMsgConstPtr &meas_msg){
 
     std::vector<gnss_comm::ObsPtr> gnss_meas = gnss_comm::msg2meas(meas_msg);
-   
+    gnss_cal::gnssCal msg;
+    pos_mu.lock();
+    Eigen::Vector3d pos = pos_ecef;
+    pos_mu.unlock();
 
+    
     for(auto obs:gnss_meas){
        
         //identify satellites type
@@ -105,7 +117,7 @@ void rangemeas_cb(const gnss_comm::GnssMeasMsgConstPtr &meas_msg){
             ROS_WARN("wait for ionosphere parameters");
             return;
         }
-        if(!pos_ecef.any()){
+        if(!pos.any()){
             ROS_WARN("wait for receiver's position");
             return;
         }
@@ -144,17 +156,30 @@ void rangemeas_cb(const gnss_comm::GnssMeasMsgConstPtr &meas_msg){
         double trop_delay = 0;
        
         double azel[2] = {0, M_PI/2.0};
-        Eigen::Vector3d rcv_lla = gnss_comm::ecef2geo(pos_ecef);
-        gnss_comm::sat_azel(pos_ecef,sat_ecef,azel);
+        Eigen::Vector3d rcv_lla = gnss_comm::ecef2geo(pos);
+        gnss_comm::sat_azel(pos,sat_ecef,azel);
         trop_delay = gnss_comm::calculate_trop_delay(obs->time,rcv_lla,azel);
+
+        iono_mu.lock();
         iono_delay = gnss_comm::calculate_ion_delay(obs->time,last_iono_param,rcv_lla,azel);
-       
+        iono_mu.unlock();
+
         //calculated pseudorange, eliminate the error of iono, trop, group delay 
         //and satellite clock drift.
         double psr = obs->psr[freq_idx]-trop_delay-iono_delay+svdt*LIGHT_SPEED-tgd*LIGHT_SPEED;    
-        std::cout<<obs->sat<<"...."<<psr<<std::endl;
+        gnss_cal::gnssToU submsg;
+        submsg.CN0 = obs->CN0;
+        submsg.psr = psr;
+        submsg.sat = obs->sat;
+        submsg.latitude = pos[0];
+        submsg.longitude = pos[1];
+        submsg.altitude = pos[2];
+        submsg.ecefX = sat_ecef[0];
+        submsg.ecefY = sat_ecef[1];
+        submsg.ecefZ = sat_ecef[2];
+        msg.meas.push_back(submsg);
     }
-    
+    pub.publish(msg);
 }
 
 
@@ -173,6 +198,7 @@ int main(int argc,char*argv[]){
     
     //create another thread for gnss meassurement callback function
     ros::NodeHandle nh_second;
+    pub = nh_second.advertise<gnss_cal::gnssCal>("gnss_post_cal",1);
     ros::CallbackQueue rangemeas_cb_queue;
     nh_second.setCallbackQueue(&rangemeas_cb_queue);
 
