@@ -103,9 +103,11 @@ void rangemeas_cb(const gnss_comm::GnssMeasMsgConstPtr &meas_msg){
         }
         if(last_iono_param.empty()){
             ROS_WARN("wait for ionosphere parameters");
+            return;
         }
         if(!pos_ecef.any()){
             ROS_WARN("wait for receiver's position");
+            return;
         }
 
         std::map<double, size_t>time2index = sat2time_index.at(obs->sat);
