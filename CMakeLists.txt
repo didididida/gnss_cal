@@ -20,6 +20,8 @@ add_message_files(
    FILES
    gnssCal.msg
    gnssToU.msg
+   detect_planes.msg
+   single_plane.msg
  )
 
 generate_messages(
