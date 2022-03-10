@@ -144,9 +144,9 @@ public:
             pt_color.rgb = *reinterpret_cast<float*>(&rgb);
             cloud_pub->points.push_back(pt_color);
         }
-        int average_height = 0;
         
         // get boundary info
+        int average_height = 0;
         pcl::PointCloud<pcl::Boundary> boundary;
         pcl::BoundaryEstimation<pcl::PointXYZ,pcl::Normal,pcl::Boundary>est;
         pcl::NormalEstimation<pcl::PointXYZ,pcl::Normal>normEst;
@@ -176,7 +176,6 @@ public:
             average_height+=plane_cloud->points[i].z;
             count++;
             }
-            else continue;
         }
         // average_height of this plane
         if(count!=0)
@@ -189,7 +188,7 @@ public:
         pcl::PointCloud<pcl::PointXYZ> cloudF;
         extract.filter(cloudF);
         cloud->swap(cloudF);
-        n_planes++;
+    
         
         //store in a ros message
         gnss_cal::single_plane submsg;
@@ -198,7 +197,7 @@ public:
         submsg.b = coefficients->values[1];
         submsg.c = coefficients->values[2];
         submsg.d = coefficients->values[3];
-        submsg.height = average_height;
+        submsg.height = pmax.z;
         planes_msg.Coeff.push_back(submsg);
         n_planes++;
     }
