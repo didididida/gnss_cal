@@ -13,6 +13,7 @@ find_package(catkin REQUIRED COMPONENTS
   std_msgs
   gnss_comm
   message_generation
+  pcl_ros
 )
 
 file(GLOB_RECURSE message_files ${PROJECT_SOURCE_DIR}/msg/*.msg)
@@ -45,6 +46,7 @@ include_directories(
   ${PROJECT_SOURCE_DIR}/include/${PROJECT_NAME}/
 )
 
-add_executable(${PROJECT_NAME} ${PROJECT_SOURCE_DIR}/src/gnss_cal_node.cpp 
-                               )
-target_link_libraries(${PROJECT_NAME} ${catkin_LIBRARIES} ${GLOG_LIBRARIES})
+add_executable(${PROJECT_NAME}_node ${PROJECT_SOURCE_DIR}/src/gnss_cal_node.cpp )
+target_link_libraries(${PROJECT_NAME}_node ${catkin_LIBRARIES} ${GLOG_LIBRARIES} )
+add_executable(check_plane_node ${PROJECT_SOURCE_DIR}/src/plane_check_node.cpp )
+target_link_libraries(check_plane_node ${catkin_LIBRARIES}  ${PCL_LIBRARIES})

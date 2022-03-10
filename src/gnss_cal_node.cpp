@@ -9,12 +9,12 @@
 #include <vector>
 #include <Eigen/Dense>
 #include <unordered_map>
-#include <vector>
 #include <thread>
 #include <ros/callback_queue.h>
 #include <mutex>
 #include "gnss_cal/gnssCal.h"
 #include "gnss_cal/gnssToU.h"
+
 
 std::mutex iono_mu; //mutex for ionosphere
 std::mutex pos_mu;
@@ -207,7 +207,7 @@ int main(int argc,char*argv[]){
         ros::SingleThreadedSpinner spinner_a;
         spinner_a.spin(&rangemeas_cb_queue);
     });
-  
+   
     ros::spin();
     spinner_thread_a.join();
 

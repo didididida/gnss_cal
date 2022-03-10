@@ -12,6 +12,9 @@
 #include <pcl/segmentation/sac_segmentation.h>
 #include <pcl/filters/extract_indices.h>
 #include <pcl/filters/passthrough.h>
+#include <pcl/features/boundary.h>
+#include <pcl/features/normal_3d.h>
+#include <pcl/common/common.h>
 //msg
 #include "gnss_cal/detect_planes.h"
 #include "gnss_cal/single_plane.h"
@@ -66,7 +69,7 @@ public:
     void pointCloudCb(const sensor_msgs::PointCloud2::ConstPtr &msg){
      
      //convert to pcl point cloud
-     pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_msg (new pcl::PointCloud<pcl::PointXY>);
+     pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_msg (new pcl::PointCloud<pcl::PointXYZ>);
      pcl::fromROSMsg(*msg,*cloud_msg);
      ROS_DEBUG("%s: new ponitcloud (%i,%i)(%zu)",_name.c_str(),cloud_msg->width,cloud_msg->height,
      cloud_msg->size());
@@ -140,8 +143,43 @@ public:
             pt_color.rgb = *reinterpret_cast<float*>(&rgb);
             cloud_pub->points.push_back(pt_color);
         }
+        int average_height = 0;
+        
         // get boundary info
-        // not write 
+        pcl::PointCloud<pcl::Boundary> boundary;
+        pcl::BoundaryEstimation<pcl::PointXYZ,pcl::Normal,pcl::Boundary>est;
+        pcl::NormalEstimation<pcl::PointXYZ,pcl::Normal>normEst;
+        pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_boudary(new pcl::PointCloud<pcl::PointXYZ>);
+        pcl::PointCloud<pcl::Normal>::Ptr normals(new pcl::PointCloud<pcl::Normal>);
+        pcl::PointCloud<pcl::PointXYZ>::Ptr plane_cloud(new pcl::PointCloud<pcl::PointXYZ>);
+        pcl::copyPointCloud(*cloud,inliers->indices,*plane_cloud);
+        //find the heighest point 
+        pcl::PointXYZ pmin;
+        pcl::PointXYZ pmax;
+        pcl::getMinMax3D(*plane_cloud,pmin,pmax);
+        normEst.setInputCloud(plane_cloud);
+        normEst.setRadiusSearch(1);
+        normEst.compute(*normals);
+        est.setInputCloud(plane_cloud);
+        est.setInputNormals(normals);
+        est.setRadiusSearch(1);
+        est.setAngleThreshold(M_PI/4);
+        est.setSearchMethod(pcl::search::KdTree<pcl::PointXYZ>::Ptr (new pcl::search::KdTree<pcl::PointXYZ>));
+        est.compute(boundary);
+        
+        int count = 0;
+        //calculate the average height
+        for(int i = 0;i<plane_cloud->points.size();i++){
+            // boundary
+            if(boundary[i].boundary_point>0&&abs(plane_cloud->points[i].z - pmax.z)<0.05*pmin.z){
+            average_height+=plane_cloud->points[i].z;
+            count++;
+            }
+            else continue;
+        }
+        // average_height of this plane
+        if(count!=0)
+        average_height /=count;
 
         // Extract inliers for the next iteration
         extract.setInputCloud(cloud);
@@ -159,6 +197,7 @@ public:
         submsg.b = coefficients->values[1];
         submsg.c = coefficients->values[2];
         submsg.d = coefficients->values[3];
+        submsg.height = average_height;
         msg.Coeff.push_back(submsg);
         n_planes++;
     }
@@ -205,16 +244,15 @@ private:
     ros::Subscriber _subs;
 
     // Algorithm parameters
-    double _min_percentage;
-    double _max_distance;
-    bool _color_pc_with_error;
+    double _min_percentage = 5;
+    double _max_distance = 1;
 
     // Colors
     std::vector<Color> colors;
 };
 
 int main(int argc,char*argv[]){
-    ros::init(argc,argv,"plane check");
+    ros::init(argc,argv,"planecheck");
     ros::NodeHandle nh("~");
     planeFilter pf (nh);
     pf.spin();
