@@ -55,9 +55,10 @@ public:
     _name = ros::this_node::getName();
 
     // get publish
+    _subs = _nh.subscribe("/livox/lidar",1,&planeFilter::pointCloudCb,this);
     _pub_inliers = _nh.advertise< sensor_msgs::PointCloud2 >("inliers",2);
     _pub_coefficient = _nh.advertise<gnss_cal::detect_planes>("planes_coefficient",1);
-    _subs = _nh.subscribe("/livox/lidar",1,&planeFilter::pointCloudCb,this);
+    
     
     // create color pallet
     createColors();
@@ -71,7 +72,7 @@ public:
      //convert to pcl point cloud
      pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_msg (new pcl::PointCloud<pcl::PointXYZ>);
      pcl::fromROSMsg(*msg,*cloud_msg);
-     ROS_DEBUG("%s: new ponitcloud (%i,%i)(%zu)",_name.c_str(),cloud_msg->width,cloud_msg->height,
+     ROS_INFO("%s: new ponitcloud (%i,%i)(%zu)",_name.c_str(),cloud_msg->width,cloud_msg->height,
      cloud_msg->size());
 
 
@@ -101,10 +102,10 @@ public:
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_pub(new pcl::PointCloud<pcl::PointXYZRGB>);
     int original_size(cloud->height*cloud->width);
     int n_planes(0);
-
+    gnss_cal::detect_planes planes_msg;
     // To segment multi-planes in point cloud
     while(cloud->height*cloud->width>=_min_percentage*original_size/100){
-        gnss_cal::detect_planes msg;
+        
         // Fit a plane
         seg.setInputCloud(cloud);
         seg.segment(*inliers, *coefficients);
@@ -112,7 +113,7 @@ public:
         // Check result
         if (inliers->indices.size() == 0)
             break;
-        if (inliers->indices.size() >= 0.03 * original_size)
+        if (inliers->indices.size() >= 0.1 * original_size)
              small_plane = false;
         else small_plane = true;
         
@@ -171,7 +172,7 @@ public:
         //calculate the average height
         for(int i = 0;i<plane_cloud->points.size();i++){
             // boundary
-            if(boundary[i].boundary_point>0&&abs(plane_cloud->points[i].z - pmax.z)<0.05*pmin.z){
+            if(boundary[i].boundary_point>0&&abs(plane_cloud->points[i].z - pmax.z)<0.05*pmax.z){
             average_height+=plane_cloud->points[i].z;
             count++;
             }
@@ -198,11 +199,11 @@ public:
         submsg.c = coefficients->values[2];
         submsg.d = coefficients->values[3];
         submsg.height = average_height;
-        msg.Coeff.push_back(submsg);
+        planes_msg.Coeff.push_back(submsg);
         n_planes++;
     }
     // Publish coefficient
-    _pub_coefficient.publish(msg);
+    _pub_coefficient.publish(planes_msg);
     // Publish points
     sensor_msgs::PointCloud2 cloud_publish;
     pcl::toROSMsg(*cloud_pub,cloud_publish);
@@ -245,7 +246,7 @@ private:
 
     // Algorithm parameters
     double _min_percentage = 5;
-    double _max_distance = 1;
+    double _max_distance = 0.005;
 
     // Colors
     std::vector<Color> colors;
