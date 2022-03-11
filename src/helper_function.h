@@ -9,6 +9,8 @@ helper function for particle filter
 #include <Eigen/Dense>
 #include <vector>
 #include <ros/ros.h>
+#include <gnss_comm/gnss_utility.hpp>
+#include <gnss_comm/gnss_constant.hpp>
 
 
 #ifndef M_PI
@@ -75,18 +77,18 @@ double point2point(const Point&p1,const Point&p2){
 
 /*get mirrored point of one known point to an known plane*/
 Point mirror(const Point&point, const Plane&plane){
-        Point symm_point;
-        //calculate dot(P-p0,normal)
-        double dott = plane.normal[0]*(point._x-plane.p._x)+plane.normal[1]*(point._y-plane.p._y)
-        +plane.normal[2]*(point._z-plane.p._z);
-        //Point R is the orthogonal projection of point on the plane
-        double rx = point._x-plane.normal[0]*dott;
-        double ry = point._y-plane.normal[1]*dott;
-        double rz = point._z-plane.normal[2]*dott;
-        symm_point._x = 2*rx-point._x;
-        symm_point._y = 2*ry-point._y;
-        symm_point._z = 2*rz-point._z;
-        return symm_point;
+    Point symm_point;
+    //calculate dot(P-p0,normal)
+    double dott = plane.normal[0]*(point._x-plane.p._x)+plane.normal[1]*(point._y-plane.p._y)
+    +plane.normal[2]*(point._z-plane.p._z);
+    //Point R is the orthogonal projection of point on the plane
+    double rx = point._x-plane.normal[0]*dott;
+    double ry = point._y-plane.normal[1]*dott;
+    double rz = point._z-plane.normal[2]*dott;
+    symm_point._x = 2*rx-point._x;
+    symm_point._y = 2*ry-point._y;
+    symm_point._z = 2*rz-point._z;
+    return symm_point;
 }
 
 /*get the intersection point between A line and a plane*/
@@ -108,6 +110,36 @@ Point linePlaneIntersection(const Point&p1,const Point&p2,const Plane& plane){
       }
       return pointIntersection;
 }
+
+/*
+Below are functions about transformation between different coordinate system
+*/
+const double d2r = M_PI/180.0;
+const double r2d = 180.0/M_PI;
+const double a = EARTH_SEMI_MAJOR;
+const double f_inverse = 298.257223563;
+const double b = a - a/f_inverse;
+const double e = sqrt(pow(a,2)-pow(b,2))/a;
+
+/*From lla to ecef in WSG-84*/
+void Blh2xyz(double &x, double &y,double &z){
+        double L = x * d2r;
+        double B = y * d2r;
+        double H = z;
+
+      double N = a / sqrt(1- e*e*sin(B)*sin(B));
+      x =(N+H) *cos(B)*cos(L);
+      y = (N+H) * cos(B) * sin(L);
+      z = z = (N * (1 - e * e) + H) * sin(B);
+}
+
+/*From ecef to enu */
+void ecef2enu(Eigen::Vector3f ec, Eigen::Vector3f enu){
+
+}
+
+/*From one to another system*/
+void xyz2xyz(){}
 
 
 #endif 
