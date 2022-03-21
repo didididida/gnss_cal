@@ -215,7 +215,7 @@ void Enu2local(double x,double y,const double theta,double &nx,double &ny){
     double ny = y;
     double rz = theta * d2r;
     nx = cos (rz) *nx - sin(rz)*ny;
-    ny = sin(rz)*nx + cos(rz)*ny;
+    ny = sin(rz)*nx + cos(rz) * ny;
 }
 
 
