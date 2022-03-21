@@ -11,7 +11,7 @@ helper function for particle filter
 #include <ros/ros.h>
 #include <gnss_comm/gnss_utility.hpp>
 #include <gnss_comm/gnss_constant.hpp>
-
+#include <sensor_msgs/Imu.h>
 
 #ifndef M_PI
 const double M_PI = 3.14159265358979323846;
@@ -116,13 +116,14 @@ Below are functions about transformation between different coordinate system
 */
 const double d2r = M_PI/180.0;
 const double r2d = 180.0/M_PI;
-const double a = EARTH_SEMI_MAJOR;
+const double a = EARTH_SEMI_MAJOR; //Info is WSG-84
 const double f_inverse = 298.257223563;
 const double b = a - a/f_inverse;
 const double e = sqrt(pow(a,2)-pow(b,2))/a;
+const double epsilon = 0.000000000000001;
 
 /*From lla to ecef in WSG-84*/
-void Blh2xyz(double &x, double &y,double &z){
+void Blh2Xyz(double &x, double &y,double &z){
         double L = x * d2r;
         double B = y * d2r;
         double H = z;
@@ -133,13 +134,89 @@ void Blh2xyz(double &x, double &y,double &z){
       z = z = (N * (1 - e * e) + H) * sin(B);
 }
 
+/*From ecef to lla*/
+void Xyz2Blh(double &x,double &y,double &z){
+      double tmpX = x;
+      double tmpY = y;
+      double tmpZ = z;
+
+      double curB = 0;
+      double N = 0;
+      double calB = atan2(tmpZ,sqrt(tmpX*tmpX + tmpY*tmpY));
+      int counter = 0;
+      while(abs(curB - calB)*r2d > epsilon && counter < 25 ){
+          curB = calB;
+          N = a / sqrt(1 - e * e * sin(curB) * sin(curB));
+          calB = atan2(tmpZ + N * e * e * sin(curB), sqrt(tmpX * tmpX + tmpY * tmpY));
+          counter++;
+      }
+      x = atan2 (tmpY,tmpX) * r2d;
+      y = curB * r2d ;
+      z = tmpZ / sin(curB) - N * (1 - e * e);	
+}
+
 /*From ecef to enu */
-void ecef2enu(Eigen::Vector3f ec, Eigen::Vector3f enu){
+void Ecef2Enu(Eigen::Vector3d &topocentricOrigin, Eigen::Vector4d& resultMat){
+    double rzAngle  = (topocentricOrigin.x() * d2r + M_PI/2);
+    Eigen::AngleAxisd rzAngelAxis(rzAngle,Eigen::Vector3d(0,0,1));
+    Eigen::Matrix3d rZ = rzAngelAxis.matrix();
+
+    double rxAngle = -(M_PI / 2 - topocentricOrigin.y() * d2r);
+    Eigen::AngleAxisd rxAngleAxis(rxAngle, Eigen::Vector3d(1, 0, 0));
+    Eigen::Matrix3d rX = rxAngleAxis.matrix();
+
+    Eigen::Matrix4d rotation;
+    rotation.setIdentity();
+    rotation.block<3, 3>(0, 0) = (rX * rZ);
+      double tx = topocentricOrigin.x();
+	  double ty = topocentricOrigin.y();
+	  double tz = topocentricOrigin.z();
+    Blh2Xyz(tx, ty, tz);
+	  Eigen::Matrix4d translation;
+  	translation.setIdentity();
+	  translation(0, 3) = -tx;
+	  translation(1, 3) = -ty;
+	  translation(2, 3) = -tz;
+	  resultMat = rotation * translation;
+}
+
+/*From enu to ecef*/
+void Enu2Ecef(Eigen::Vector3d &topocentricOrigin, Eigen::Matrix4d &resultMat){
+     double rzAngle = (topocentricOrigin.x()*d2r + M_PI/2);
+     Eigen::AngleAxisd rzAngelAxis(rzAngle,Eigen::Vector3d(0,0,1));
+     Eigen::Matrix3d rZ = rzAngelAxis.matrix();
+
+     double rxAngle = (M_PI/2 + topocentricOrigin.y()*d2r);
+     Eigen::AngleAxisd rxAngleAxis(rxAngle,Eigen::Vector3d(1,0,0));
+     Eigen::Matrix3d rX = rzAngelAxis.matrix();
+
+     Eigen::Matrix4d rotation;
+     rotation.setIdentity();
+     rotation.block<3,3>(0,0) = rZ*rX;
+
+     double tx = topocentricOrigin.x();
+     double ty = topocentricOrigin.y();
+     double tz = topocentricOrigin.z();
+     Blh2Xyz(tx, ty ,tz);
+     Eigen::Matrix4d translation;
+     translation.setIdentity();
+     translation (0,3) = tx;
+     translation (1,3) = ty;
+     translation (2,3) = tz;
+
+     resultMat = translation * rotation;
 
 }
 
-/*From one to another system*/
-void xyz2xyz(){}
+
+/*From one to local coordinate system, rostate by axis z*/
+void Enu2local(double x,double y,const double theta,double &nx,double &ny){
+    double nx = x;
+    double ny = y;
+    double rz = theta * d2r;
+    nx = cos (rz) *nx - sin(rz)*ny;
+    ny = sin(rz)*nx + cos(rz)*ny;
+}
 
 
 #endif 
