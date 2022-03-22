@@ -8,6 +8,36 @@
 #include <mutex>
 #include <shared_mutex>
 
+//acceleration due to gravity
+constexpr float G = 9.807f;
+constexpr float SIG_W_A = 0.05f; //acceleration
+constexpr float SIG_W_G = 0.00175f; //gyro
+// Std dev of Accelerometer Markov Bias
+constexpr float SIG_A_D = 0.01f;
+// Std dev of correlated gyro bias
+constexpr float SIG_G_D = 0.00025;
+// Correlation time or time constant
+constexpr float TAU_A = 100.0f;
+// Correlati1on time or time constant
+constexpr float TAU_G = 50.0f;
+// GPS measurement noise std dev (m)
+constexpr float SIG_GPS_P_NE = 3.0f;
+constexpr float SIG_GPS_P_D = 6.0f;
+// GPS measurement noise std dev (m/s)
+constexpr float SIG_GPS_V_NE = 0.5f;
+constexpr float SIG_GPS_V_D = 1.0f;
+// Initial set of covariance
+constexpr float P_P_INIT = 10.0f;
+constexpr float P_V_INIT = 1.0f;
+constexpr float P_A_INIT = 0.34906f;
+constexpr float P_HDG_INIT = 3.14159f;
+constexpr float P_AB_INIT = 0.9810f;
+constexpr float P_GB_INIT = 0.01745f;
+// major eccentricity squared
+constexpr double ECC2 = 0.0066943799901;
+// earth semi-major axis radius (m)
+constexpr double EARTH_RADIUS = 6378137.0;
+
 class gpsCoordinate{
     public:
     double lat;
@@ -23,15 +53,16 @@ class gpsVelocity{
 };
 
 class imuData{
+public:
    float gyroX; //gyro
    float gyroY;
    float gyroZ;
    float accX; //accelerator
    float accY;
    float accZ;
-   float hx; // Magenetometer
-   float hy;
-   float hz; 
+   float hX; // Magenetometer
+   float hY;
+   float hZ; 
 };
 
 /*class for the extened kalman filter*/
@@ -87,14 +118,14 @@ class ekfNav{
    /*private member variables and functions*/
    private:
    gpsCoordinate gpsCoor;
-   gpsVelocity gosVel;
-   imuData imuDa;
+   gpsVelocity gpsVel;
+   imuData imuDat;
    mutable std::shared_timed_mutex shMutex;
    bool initialized_ = false;
    uint64_t _tprev; //timing
    unsigned long previousTOW;
    //estimated attitude (angle)
-   float phi, theta,psi;
+   float phi, theta, psi;
    //estimated NED velocity
    double vn_ins,ve_ins,vd_ins;
    //estimated location
@@ -111,11 +142,13 @@ class ekfNav{
    Eigen::Matrix<float,15,15>Fs = Eigen::Matrix<float,15,15>::Identity();
    //state transformation matrix
    Eigen::Matrix<float,15,15>PHI = Eigen::Matrix<float,15,15>::Zero();
+
    //convariance Matrix
    Eigen::Matrix<float,15,15>P = Eigen::Matrix<float,15,15>::Zero();
    
    //process noise transfromation
    Eigen::Matrix<float,15,12>Gs = Eigen::Matrix<float,15,12>::Zero();
+
    Eigen::Matrix<float,15,12>Rw = Eigen::Matrix<float,15,12>::Zero();
 
    //process noise Matrix
