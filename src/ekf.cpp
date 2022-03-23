@@ -18,8 +18,8 @@ quat = toQuaternion(theta,phi,psi);
 // gravity for z is G
 grav(2,0) = G;
 
-//kalman gain
-H.block(0,0,5,5) =  Eigen::Matrix<float,5,5>::Identity();
+  //kalman gain
+  H.block(0,0,5,5) =  Eigen::Matrix<float,5,5>::Identity();
 
   //process noise 
   Rw.block(0,0,3,3) = powf(SIG_W_A,2.0f)*Eigen::Matrix<float,3,3>::Identity();
@@ -70,13 +70,14 @@ void ekfNav::ekf_update( uint64_t time/*, unsigned long TOW*/, double vn,double 
     dq(1) = 0.5f*om_ib(0,0)*_dt;
     dq(2) = 0.5f*om_ib(1,0)*_dt;
     dq(3) = 0.5f*om_ib(2,0)*_dt;
+    //quaternion multiply, means tranfrom
     quat = qmult(quat,dq);
     quat.normalize();
     // Avoid quaternion flips sign
     if (quat(0) < 0) {
       quat = -1.0f*quat;
     }
-    // AHRS Transformations
+    // AHRS Transformations, from quaternion to transform matrix
     C_N2B = quat2dcm(quat);
     C_B2N = C_N2B.transpose();
 
@@ -84,7 +85,9 @@ void ekfNav::ekf_update( uint64_t time/*, unsigned long TOW*/, double vn,double 
     std::tie(phi, theta, psi) = toEulerAngles(quat);
 
     // Velocity Update
+    // get accelerator for x,y,z direction
     dx = C_B2N * f_b + grav;
+    //get estimated velocity in x,y,z direction
     vn_ins += _dt*dx(0,0);
     ve_ins += _dt*dx(1,0);
     vd_ins += _dt*dx(2,0);
@@ -125,29 +128,56 @@ void ekfNav::ekf_update( uint64_t time/*, unsigned long TOW*/, double vn,double 
 
 void ekfNav::ekf_update(uint64_t time) {
   std::shared_lock<std::shared_timed_mutex> lock(shMutex);
-  ekf_update(time, /*0,*/ gpsVel.vN, gpsVel.vE, gpsVel.vD,
-                      gpsCoor.lat, gpsCoor.lon, gpsCoor.alt,
-                      imuDat.gyroX, imuDat.gyroY, imuDat.gyroZ,
-                      imuDat.accX, imuDat.accY, imuDat.accZ,
-                      imuDat.hX, imuDat.hY, imuDat.hZ);
+  ekf_update(time, /*0,*/  pGpsVelDat->vN, pGpsVelDat->vE, pGpsVelDat->vD,
+                      pGpsPosDat->lat, pGpsPosDat->lon, pGpsPosDat->alt,
+                      pImuDat->gyroX, pImuDat->gyroY, pImuDat->gyroZ,
+                      pImuDat->acclX, pImuDat->acclY, pImuDat->acclZ,
+                      pMagDat->hX, pMagDat->hY, pMagDat->hZ);
 }
 
-void ekfNav::imuUpdateEKF(uint64_t time, imuData imu) {
+bool ekfNav::imuDataUpdateEKF(const imuDataPtr imu, ekfState* ekfOut) {
   {
     std::unique_lock<std::shared_timed_mutex> lock(shMutex);
-    imuDat = imu;
+    pImuDat = imu;
+    is_imu_initialized = true;
   }
-  ekf_update(time);
+  if(is_gps_pos_initialized && is_gps_vel_initialized && is_imu_initialized &&is_mag_initialized)
+  {
+    ekf_update(pImuDat->imu_time);
+    //update ekf output
+    ekfOut->timestamp = pImuDat->imu_time;
+    ekfOut->lla =  Eigen::Vector3d(getLatitude_rad(), getLongitude_rad(), getAltitude_m());
+    ekfOut->velNED = Eigen::Vector3d(getVelNorth_ms(), getVelEast_ms(), getVelDown_ms());
+    ekfOut->linear = f_b;
+    ekfOut->angular = om_ib;
+    ekfOut->quat = toQuaternion(getHeading_rad(), getPitch_rad(), getRoll_rad());
+    ekfOut->cov = P;
+    ekfOut->accl_bias = Eigen::Vector3d(getAccelBiasX_mss(), getAccelBiasY_mss(), getAccelBiasZ_mss());
+    ekfOut->gyro_bias = Eigen::Vector3d(getGyroBiasX_rads(), getGyroBiasY_rads(), getGyroBiasZ_rads());
+    return true;
+  }else{
+    return false;
+  }
 }
 
-void ekfNav::gpsCoordinateUpdateEKF(gpsCoordinate coor) {
+void ekfNav::magDataUpdateEKF(const magDataPtr mag) {
   std::unique_lock<std::shared_timed_mutex> lock(shMutex);
-  gpsCoor = coor;
+  pMagDat = mag;
+  is_mag_initialized = true;
 }
 
-void ekfNav::gpsVelocityUpdateEKF(gpsVelocity vel) {
+
+void ekfNav::gpsPosDataUpdateEKF(const gpsPosDataPtr pos) {
   std::unique_lock<std::shared_timed_mutex> lock(shMutex);
-  gpsVel = vel;
+  pGpsPosDat = pos;
+  is_gps_pos_initialized = true;
+}
+
+
+void ekfNav::gpsVelDataUpdateEKF(const gpsVelDataPtr vel) {
+  std::unique_lock<std::shared_timed_mutex> lock(shMutex);
+  pGpsVelDat = vel;
+  is_gps_vel_initialized = true;
 }
 
 
