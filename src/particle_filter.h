@@ -9,7 +9,8 @@
 #include "gnss_cal/gnssToU.h"
 #include "gnss_cal/detect_planes.h"
 #include "gnss_cal/single_plane.h"
-
+#include <mutex>
+#include <shared_mutex>
 
 struct Particle{
     int id;
@@ -19,14 +20,46 @@ struct Particle{
     double weight;
 };
 
+struct Pos_info{
+    uint64_t pos_time;
+    double lat;
+    double lon;
+    double alt;
+};
+
+struct Sat_info{
+    double CN0;
+    double psr;
+    double ecefX;
+    double ecefY;
+    double ecefZ;
+};
+
+struct Coefficient{
+    double a;
+    double b;
+    double c;
+    double d;
+};
+
+struct detected_planes{
+    uint64_t detect_time;
+    Coefficient planes[];
+};
+
+struct SatelliteInfo{
+    uint64_t sat_time;
+    Sat_info meas[];
+};
+
 
 class ParticleFilter{
 public:
      
-    std::vector<Particle> particles;
+    
 
     /*constructor*/
-    ParticleFilter():num_particles(0),is_initialized(false){}
+    ParticleFilter(){}
 
     /*deconstructor*/
     ~ParticleFilter(){}
@@ -35,7 +68,7 @@ public:
     void init(double x,double y,double z);
 
     /*update weight according to observation*/
-    void updateWeights();
+    void updateWeights(double x,double y,double z);
   
     /*predict the next timestamp*/
     void prediction();
@@ -43,22 +76,24 @@ public:
 
     /* initialized Returns whether particle filter is initialized yet or not.*/
     const bool initialized() const {
-        return is_initialized;
+        return is_gps_initialized && is_imu_initialized && is_lidar_initialized;
     }
    
     /*to calculate average result from all particles*/
-    Eigen::Vector3d getAverage(std::vector<Particle> particles);
+    Eigen::Vector3d getAverage(const std::vector<Particle> &particles);
     
 
 private:
     //numbers of particles
     int num_particles;
-
+    std::vector<Particle> particles;
     //Flag 
-    bool is_initialized;
+    mutable std::shared_timed_mutex shMutex;
+    bool is_gps_initialized = false;
+    bool is_lidar_initialized = false;
+    bool is_imu_initialized = false;
+  
 
-    //weights of all particles
-    std::vector<double>weights;
 };
 
 #endif

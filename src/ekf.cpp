@@ -119,7 +119,7 @@ void ekfNav::ekf_update( uint64_t time/*, unsigned long TOW*/, double vn,double 
       P = (Eigen::Matrix<float,15,15>::Identity()-K*H)*P*(Eigen::Matrix<float,15,15>::Identity()-K*H).transpose() + K*R*K.transpose();
       
       //state update
-      x = K *y;
+      x = K * y;
       update15statesAfterKF();
       _tprev = time;
     
