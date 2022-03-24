@@ -36,7 +36,7 @@ public:
 
     /*update weight according to observation*/
     void updateWeights();
-
+  
     /*predict the next timestamp*/
     void prediction();
     
@@ -45,6 +45,10 @@ public:
     const bool initialized() const {
         return is_initialized;
     }
+   
+    /*to calculate average result from all particles*/
+    Eigen::Vector3d getAverage(std::vector<Particle> particles);
+    
 
 private:
     //numbers of particles

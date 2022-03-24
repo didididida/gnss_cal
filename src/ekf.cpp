@@ -117,6 +117,9 @@ void ekfNav::ekf_update( uint64_t time/*, unsigned long TOW*/, double vn,double 
 
       // Covariance update
       P = (Eigen::Matrix<float,15,15>::Identity()-K*H)*P*(Eigen::Matrix<float,15,15>::Identity()-K*H).transpose() + K*R*K.transpose();
+      
+      //state update
+      x = K *y;
       update15statesAfterKF();
       _tprev = time;
     
