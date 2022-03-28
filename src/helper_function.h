@@ -7,6 +7,7 @@ helper function for particle filter
 #include <math.h>
 #include <sstream>
 #include <Eigen/Dense>
+#include <Eigen/Core>
 #include <vector>
 #include <ros/ros.h>
 #include <gnss_comm/gnss_utility.hpp>
@@ -32,7 +33,8 @@ public:
 //class for a plane
 class Plane{
 public:
-    Plane(double A,double B,double C,double D):_A(A),_B(B),_C(C),_D(D){
+    Plane(double A,double B,double C,double D,double zmax,double zmin):_A(A),_B(B),_C(C),_D(D)
+    ,z_max(zmax),z_min(zmin){
         initialize();
     }
 
@@ -55,6 +57,8 @@ public:
     double _B;
     double _C;
     double _D;
+    double z_max;
+    double z_min;
     double squredSum; 
     double normalizer;
     double normal[3];  //normal vector of this plane
@@ -218,5 +222,20 @@ void Enu2local(double x,double y,const double theta,double &nx,double &ny){
     ny = sin(rz)*nx + cos(rz) * ny;
 }
 
+Eigen::Matrix<float,3,3> quat2dcm(Eigen::Matrix<float,4,1> q) {
+  Eigen::Matrix<float,3,3> C_N2B;
+  C_N2B(0,0) = 2.0f*powf(q(0,0),2.0f)-1.0f + 2.0f*powf(q(1,0),2.0f);
+  C_N2B(1,1) = 2.0f*powf(q(0,0),2.0f)-1.0f + 2.0f*powf(q(2,0),2.0f);
+  C_N2B(2,2) = 2.0f*powf(q(0,0),2.0f)-1.0f + 2.0f*powf(q(3,0),2.0f);
 
+  C_N2B(0,1) = 2.0f*q(1,0)*q(2,0) + 2.0f*q(0,0)*q(3,0);
+  C_N2B(0,2) = 2.0f*q(1,0)*q(3,0) - 2.0f*q(0,0)*q(2,0);
+
+  C_N2B(1,0) = 2.0f*q(1,0)*q(2,0) - 2.0f*q(0,0)*q(3,0);
+  C_N2B(1,2) = 2.0f*q(2,0)*q(3,0) + 2.0f*q(0,0)*q(1,0);
+
+  C_N2B(2,0) = 2.0f*q(1,0)*q(3,0) + 2.0f*q(0,0)*q(2,0);
+  C_N2B(2,1) = 2.0f*q(2,0)*q(3,0) - 2.0f*q(0,0)*q(1,0);
+  return C_N2B;
+}
 #endif 

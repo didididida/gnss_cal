@@ -171,9 +171,6 @@ void rangemeas_cb(const gnss_comm::GnssMeasMsgConstPtr &meas_msg){
         submsg.CN0 = obs->CN0;
         submsg.psr = psr;
         submsg.sat = obs->sat;
-        submsg.latitude = pos[0];
-        submsg.longitude = pos[1];
-        submsg.altitude = pos[2];
         submsg.ecefX = sat_ecef[0];
         submsg.ecefY = sat_ecef[1];
         submsg.ecefZ = sat_ecef[2];

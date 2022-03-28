@@ -145,19 +145,16 @@ public:
             cloud_pub->points.push_back(pt_color);
         }
         
-        // get boundary info
+        /* get boundary info
         int average_height = 0;
         pcl::PointCloud<pcl::Boundary> boundary;
         pcl::BoundaryEstimation<pcl::PointXYZ,pcl::Normal,pcl::Boundary>est;
         pcl::NormalEstimation<pcl::PointXYZ,pcl::Normal>normEst;
         pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_boudary(new pcl::PointCloud<pcl::PointXYZ>);
         pcl::PointCloud<pcl::Normal>::Ptr normals(new pcl::PointCloud<pcl::Normal>);
-        pcl::PointCloud<pcl::PointXYZ>::Ptr plane_cloud(new pcl::PointCloud<pcl::PointXYZ>);
-        pcl::copyPointCloud(*cloud,inliers->indices,*plane_cloud);
+        
         //find the heighest point 
-        pcl::PointXYZ pmin;
-        pcl::PointXYZ pmax;
-        pcl::getMinMax3D(*plane_cloud,pmin,pmax);
+        
         normEst.setInputCloud(plane_cloud);
         normEst.setRadiusSearch(1);
         normEst.compute(*normals);
@@ -180,6 +177,12 @@ public:
         // average_height of this plane
         if(count!=0)
         average_height /=count;
+        */
+        pcl::PointCloud<pcl::PointXYZ>::Ptr plane_cloud(new pcl::PointCloud<pcl::PointXYZ>);
+        pcl::copyPointCloud(*cloud,inliers->indices,*plane_cloud);
+        pcl::PointXYZ pmin;
+        pcl::PointXYZ pmax;
+        pcl::getMinMax3D(*plane_cloud,pmin,pmax);
 
         // Extract inliers for the next iteration
         extract.setInputCloud(cloud);
@@ -197,7 +200,8 @@ public:
         submsg.b = coefficients->values[1];
         submsg.c = coefficients->values[2];
         submsg.d = coefficients->values[3];
-        submsg.height = pmax.z;
+        submsg.z_max = pmax.z;
+        submsg.z_min = pmin.z;
         planes_msg.Coeff.push_back(submsg);
         n_planes++;
     }
