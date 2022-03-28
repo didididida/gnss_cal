@@ -1,17 +1,25 @@
 #include "particle_filter.h"
 
-void ParticleFilter::init(const double &lat,const double &lon,const double &alt){
-
-    
-    
+void ParticleFilter::init(){
+    for(int i = 0;i<num_particles;++i){
+        Particle p;
+        particles.push_back(p);
+    }
+    is_initialized = true;
 }
+
+
+void ParticleFilter::scatter(const double &lat,const double &lon,const double&alt){
+
+}
+
 
 void ParticleFilter::updateWeights(double lat,double lon,double alt,Eigen::Matrix<float,3,3>cn2b,std::vector<Plane>planes
     , std::vector<Sat_info>sat){
     if(!initialized()){
-        init(lat,lon,alt);
+        init();
     }
-
+    scatter(lat,lon,alt);
     /*for each particle do ray-tracing process*/
     for (const auto &p :particles){
 

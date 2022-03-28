@@ -13,8 +13,9 @@
 #include <mutex>
 #include <shared_mutex>
 
-struct Particle{
-    int id;
+class Particle{
+public:
+    Particle();
     double x;
     double y;
     double z;
@@ -69,17 +70,16 @@ public:
     /*deconstructor*/
     ~ParticleFilter(){}
     
-    /*initialize*/
-    void init(const double &lat,const double &lon,const double &alt);
+    /*initialize particles*/
+    void init();
 
     /*update weight according to observation*/
     void updateWeights(double lat,double lon,double alt,Eigen::Matrix<float,3,3>cn2b,std::vector<Plane>planes
     , std::vector<Sat_info>sat);
-  
     void updateWeights();
-    /*predict the next timestamp*/
-    void prediction();
-    
+
+    /*scatter particles around gps pos*/
+    void scatter(const double &lat,const double &lon,const double&alt);
 
     /* initialized Returns whether particle filter is initialized yet or not.*/
     const bool initialized() const {
