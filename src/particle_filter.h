@@ -19,6 +19,7 @@
 class Particle{
 public:
     Particle();
+    int id;
     double x;
     double y;
     double z;

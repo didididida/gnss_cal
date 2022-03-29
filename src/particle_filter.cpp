@@ -15,6 +15,7 @@ for(int i=0;i<7;i++){
     p.y = utm_original_point.northing+grid[j];
     p.z=utm_original_point.altitude;
     p.weight = 0;
+    p.id = count;
     particles[count]=p;
     count++;
     }
@@ -54,7 +55,9 @@ void ParticleFilter::updateWeights(double lat,double lon,double alt, Eigen::Matr
 
     //scatter around utm position
     scatter();
-
+     
+    //hashmap to store estimated psudorange
+    std::unordered_map<int,double> id_error;
 
     /*for each particle do ray-tracing process*/
   for (const auto &p :particles){
@@ -69,9 +72,10 @@ void ParticleFilter::updateWeights(double lat,double lon,double alt, Eigen::Matr
     
     //position for lidar in lidar's own system
     Point p_lidar(0,0,0);
-    //hashmap to store estimated psudorange
-    std::unordered_map<int,double> id_psr;
 
+    //average error about psudorange
+    double avr_error = 0.0;
+    double sum_error = 0.0;
             /*For each satellite do ray-tracing*/
             for(int i=0;i<sat.size();i++){
 
@@ -90,7 +94,8 @@ void ParticleFilter::updateWeights(double lat,double lon,double alt, Eigen::Matr
             //position of satellite in body frame 
             Eigen::Vector3d sat_pos;
             sat_pos = C_N2B*sat_end;
-
+            
+            
 
             /*For each plane detected by lidar*/
             for(int j=0;j<planes.size();j++){
@@ -115,11 +120,17 @@ void ParticleFilter::updateWeights(double lat,double lon,double alt, Eigen::Matr
             }
         
             double error = abs(psr_estimated-psr_mea);
-            id_psr[sat[i].id]=error;
+            sum_error += error;
+           
         }
-        
-        
+        avr_error = sum_error/sat.size();
+        id_error[p.id]=avr_error;
     }
+
+    //assign weight for all particles based on its error.
+
+
+    //calculate average position data
 }
 
 void ParticleFilter::updateWeights(){
