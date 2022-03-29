@@ -117,7 +117,6 @@ Point linePlaneIntersection(const Point&p1,const Point&p2,const Plane& plane){
 
 /*
 Below are functions about transformation between different coordinate system
-*/
 const double d2r = M_PI/180.0;
 const double r2d = 180.0/M_PI;
 const double a = EARTH_SEMI_MAJOR; //Info is WSG-84
@@ -126,7 +125,7 @@ const double b = a - a/f_inverse;
 const double e = sqrt(pow(a,2)-pow(b,2))/a;
 const double epsilon = 0.000000000000001;
 
-/*From lla to ecef in WSG-84*/
+//From lla to ecef in WSG-84
 void Blh2Xyz(double &x, double &y,double &z){
         double L = x * d2r;
         double B = y * d2r;
@@ -138,7 +137,7 @@ void Blh2Xyz(double &x, double &y,double &z){
       z = z = (N * (1 - e * e) + H) * sin(B);
 }
 
-/*From ecef to lla*/
+//From ecef to lla
 void Xyz2Blh(double &x,double &y,double &z){
       double tmpX = x;
       double tmpY = y;
@@ -159,7 +158,7 @@ void Xyz2Blh(double &x,double &y,double &z){
       z = tmpZ / sin(curB) - N * (1 - e * e);	
 }
 
-/*From ecef to enu */
+//From ecef to enu 
 void Ecef2Enu(Eigen::Vector3d &topocentricOrigin, Eigen::Vector4d& resultMat){
     double rzAngle  = (topocentricOrigin.x() * d2r + M_PI/2);
     Eigen::AngleAxisd rzAngelAxis(rzAngle,Eigen::Vector3d(0,0,1));
@@ -184,7 +183,7 @@ void Ecef2Enu(Eigen::Vector3d &topocentricOrigin, Eigen::Vector4d& resultMat){
 	  resultMat = rotation * translation;
 }
 
-/*From enu to ecef*/
+//From enu to ecef
 void Enu2Ecef(Eigen::Vector3d &topocentricOrigin, Eigen::Matrix4d &resultMat){
      double rzAngle = (topocentricOrigin.x()*d2r + M_PI/2);
      Eigen::AngleAxisd rzAngelAxis(rzAngle,Eigen::Vector3d(0,0,1));
@@ -213,7 +212,7 @@ void Enu2Ecef(Eigen::Vector3d &topocentricOrigin, Eigen::Matrix4d &resultMat){
 }
 
 
-/*From one to local coordinate system, rostate by axis z*/
+//From one to local coordinate system, rostate by axis z
 void Enu2local(double x,double y,const double theta,double &nx,double &ny){
     double nx = x;
     double ny = y;
@@ -221,6 +220,7 @@ void Enu2local(double x,double y,const double theta,double &nx,double &ny){
     nx = cos (rz) *nx - sin(rz)*ny;
     ny = sin(rz)*nx + cos(rz) * ny;
 }
+*/
 
 Eigen::Matrix<float,3,3> quat2dcm(Eigen::Matrix<float,4,1> q) {
   Eigen::Matrix<float,3,3> C_N2B;
@@ -237,5 +237,36 @@ Eigen::Matrix<float,3,3> quat2dcm(Eigen::Matrix<float,4,1> q) {
   C_N2B(2,0) = 2.0f*q(1,0)*q(3,0) + 2.0f*q(0,0)*q(2,0);
   C_N2B(2,1) = 2.0f*q(2,0)*q(3,0) - 2.0f*q(0,0)*q(1,0);
   return C_N2B;
+}
+// major eccentricity squared
+constexpr double ECC2 = 0.0066943799901;
+// earth semi-major axis radius (m)
+constexpr double EARTH_RADIUS = 6378137.0;
+
+constexpr std::pair<double, double> earthradius(double lat) {
+  double denom = fabs(1.0 - (ECC2 * pow(sin(lat),2.0)));
+  double Rew = EARTH_RADIUS / sqrt(denom);
+  double Rns = EARTH_RADIUS * (1.0-ECC2) / (denom*sqrt(denom));
+  return (std::make_pair(Rew, Rns));
+}
+
+// This function calculates the ECEF Coordinate given the Latitude, Longitude and Altitude.
+Eigen::Matrix<double,3,1> lla2ecef(Eigen::Matrix<double,3,1> lla) {
+  double Rew, denom;
+  Eigen::Matrix<double,3,1> ecef;
+  std::tie(Rew, std::ignore) = earthradius(lla(0,0));
+  ecef(0,0) = (Rew + lla(2,0)) * cos(lla(0,0)) * cos(lla(1,0));
+  ecef(1,0) = (Rew + lla(2,0)) * cos(lla(0,0)) * sin(lla(1,0));
+  ecef(2,0) = (Rew * (1.0 - ECC2) + lla(2,0)) * sin(lla(0,0));
+  return ecef;
+}
+
+// This function converts a vector in ecef to ned coordinate centered at pos_ref.
+Eigen::Matrix<double,3,1> ecef2ned(Eigen::Matrix<double,3,1> ecef,Eigen::Matrix<double,3,1> pos_ref) {
+  Eigen::Matrix<double,3,1> ned;
+  ned(1,0)=-sin(pos_ref(1,0))*ecef(0,0) + cos(pos_ref(1,0))*ecef(1,0);
+  ned(0,0)=-sin(pos_ref(0,0))*cos(pos_ref(1,0))*ecef(0,0)-sin(pos_ref(0,0))*sin(pos_ref(1,0))*ecef(1,0)+cos(pos_ref(0,0))*ecef(2,0);
+  ned(2,0)=-cos(pos_ref(0,0))*cos(pos_ref(1,0))*ecef(0,0)-cos(pos_ref(0,0))*sin(pos_ref(1,0))*ecef(1,0)-sin(pos_ref(0,0))*ecef(2,0);
+  return ned;
 }
 #endif 
