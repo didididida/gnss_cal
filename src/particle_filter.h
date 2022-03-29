@@ -12,6 +12,10 @@
 #include <sensor_msgs/NavSatFix.h>
 #include <mutex>
 #include <shared_mutex>
+#include <geodesy/utm.h>
+#include <geodesy/wgs84.h>
+#include <geographic_msgs/GeoPointStamped.h>
+#include <random>
 
 class Particle{
 public:
@@ -32,6 +36,7 @@ using gpsPosDataPtr = std::shared_ptr<Pos_info>;
 
 class Sat_info{
 public:
+    int id;
     double CN0;
     double psr;
     double ecefX;
@@ -74,13 +79,16 @@ public:
     void init();
 
     /*update weight according to observation*/
-    void updateWeights(double lat,double lon,double alt,Eigen::Matrix<float,3,3>cn2b,std::vector<Plane>planes
+    void updateWeights(double lat,double lon,double alt, Eigen::Matrix<float,4,1> q,std::vector<Plane>planes
     , std::vector<Sat_info>sat);
     void updateWeights();
 
     /*scatter particles around gps pos*/
-    void scatter(const double &lat,const double &lon,const double&alt);
+    void scatter();
+    
+    void WGS2UTM(const double &lat,const double &lon,const double &alt);
 
+    void UTM2WGS(Eigen::Vector3d &geo, geodesy::UTMPoint utm_point);
     /* initialized Returns whether particle filter is initialized yet or not.*/
     const bool initialized() const {
         return is_initialized;
@@ -96,7 +104,7 @@ public:
     void updateSat (const gnss_cal::gnssCalConstPtr &gps_msg);
     //get gps position
     void updateGps(const sensor_msgs::NavSatFixConstPtr &pos_msg);
-
+   
 private:
     //numbers of particles
     int num_particles;
@@ -114,6 +122,15 @@ private:
     std::vector<Plane> planes;
     std::vector<Sat_info> sat;
     Eigen::Matrix<float,3,3> C_N2B;
+
+    //position in UTM
+    Eigen::Vector3d UTM;
+    //quoternion
+    Eigen::Matrix<float,4,1> q;
+    //original point
+    geodesy::UTMPoint utm_original_point;
+    std::vector<int>grid={-6,-4,-2,0,2,4,6};
+    
 };
 
 #endif
