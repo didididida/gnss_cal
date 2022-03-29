@@ -67,38 +67,42 @@ void ParticleFilter::updateWeights(double lat,double lon,double alt, Eigen::Matr
     Eigen::Vector3d ecef_p;
     ecef_p = lla2ecef(geo_p);
     
+    //position for lidar in lidar's own system
     Point p_lidar(0,0,0);
-    /*For each plane detected by lidar*/
-        for(int i=0;i<planes.size();i++){
-             
-            //do mirror about this planes
-            Point p_mir;
-            p_mir = mirror(p_lidar,planes[i]);
+    //hashmap to store estimated psudorange
+    std::unordered_map<int,double> id_psr;
 
             /*For each satellite do ray-tracing*/
-            for(int j=0;j<sat.size();j++){
+            for(int i=0;i<sat.size();i++){
 
 
             // estimated pseudorange
             double psr_estimated = DBL_MAX;
             double psr_mea = sat[i].psr;
-            int id = sat[i].id;
 
             Eigen::Vector3d sat_ecef;
             sat_ecef[0]=sat[i].ecefX;
             sat_ecef[1]=sat[i].ecefY;
             sat_ecef[2]=sat[i].ecefZ;
             Eigen::Vector3d sat_end;
-            sat_end = ecef2ned(sat_ecef,sat_end);
+            sat_end = ecef2ned(sat_ecef,ecef_p);
             
             //position of satellite in body frame 
             Eigen::Vector3d sat_pos;
             sat_pos = C_N2B*sat_end;
-            Point p_sat (sat_pos[0],sat_pos[1],sat_pos[2]);
-            Point p_intersect = linePlaneIntersection(p_mir,p_sat,planes[i]);
+
+
+            /*For each plane detected by lidar*/
+            for(int j=0;j<planes.size();j++){
+
+               //do mirror about this planes
+               Point p_mir;
+               p_mir = mirror(p_lidar,planes[i]);
+               Point p_sat (sat_pos[0],sat_pos[1],sat_pos[2]);
+               Point p_intersect = linePlaneIntersection(p_mir,p_sat,planes[j]);
             
                //validate intersec point within this plane
-               if(p_intersect._z>planes[i].z_max||p_intersect._z<planes[i].z_min)
+               if(p_intersect._z>planes[j].z_max||p_intersect._z<planes[j].z_min)
                {
                   double tmp_psr = point2point(p_lidar,p_sat);
                   psr_estimated = std::min(psr_estimated,tmp_psr);
@@ -108,11 +112,13 @@ void ParticleFilter::updateWeights(double lat,double lon,double alt, Eigen::Matr
                   double tmp_psr = point2point(p_mir,p_sat);
                   psr_estimated = std::min(psr_estimated,tmp_psr);
                }
-
-
             }
-
+        
+            double error = abs(psr_estimated-psr_mea);
+            id_psr[sat[i].id]=error;
         }
+        
+        
     }
 }
 
