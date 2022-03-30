@@ -16,6 +16,8 @@
 #include <geodesy/wgs84.h>
 #include <geographic_msgs/GeoPointStamped.h>
 #include <unordered_map>
+#include <random>
+
 class Particle{
 public:
     Particle();
@@ -67,16 +69,20 @@ struct SatelliteInfo{
 class ParticleFilter{
 public:
      
-    
-
     /*constructor*/
-    ParticleFilter(){}
-
+    ParticleFilter(ros::NodeHandle nh):_nh(nh){
+        init_ros();
+    }
+    void init_ros();
+ 
+    void spin(){
+        ros::spin();
+    }
     /*deconstructor*/
     ~ParticleFilter(){}
     
     /*initialize particles*/
-    void init();
+    void init_pf();
 
     /*update weight according to observation*/
     void updateWeights(double lat,double lon,double alt, Eigen::Matrix<float,4,1> q,std::vector<Plane>planes
@@ -106,6 +112,12 @@ public:
     void updateGps(const sensor_msgs::NavSatFixConstPtr &pos_msg);
    
 private:
+    ros::NodeHandle _nh;
+    ros::Publisher _pub_nav;
+    ros::Subscriber _sub_imu;
+    ros::Subscriber _sub_lidar;
+    ros::Subscriber _sub_gps;
+    ros::Subscriber _sub_sat;
     //numbers of particles
     int num_particles;
     std::vector<Particle> particles;
@@ -122,7 +134,8 @@ private:
     std::vector<Plane> planes;
     std::vector<Sat_info> sat;
     Eigen::Matrix<float,3,3> C_N2B;
-
+    // variation of pseudorange's error
+    double SIGMA_P = 0.5;
     //position in UTM
     Eigen::Vector3d UTM;
     //quoternion
@@ -130,6 +143,9 @@ private:
     //original point
     geodesy::UTMPoint utm_original_point;
     std::vector<int>grid={-6,-4,-2,0,2,4,6};
+
+    //NavSatFix restore
+    sensor_msgs::NavSatFix restore_;
     
 };
 

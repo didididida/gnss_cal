@@ -1,6 +1,17 @@
 #include "particle_filter.h"
 
-void ParticleFilter::init(){
+
+void ParticleFilter::init_ros(){
+    _sub_gps = _nh.subscribe("/ublox/gps",1,&ParticleFilter::updateGps,this);
+    _sub_imu = _nh.subscribe("/imu",1,&ParticleFilter::updateImu,this);
+    _sub_lidar = _nh.subscribe("/plane",1,&ParticleFilter::updateLidar,this);
+    _sub_sat = _nh.subscribe("/sat",1,&ParticleFilter::updateSat,this);
+    _pub_nav = _nh.advertise<sensor_msgs::NavSatFix>("post_nav",1);
+
+    ROS_INFO("ROSNODE FOR PARTICLE FILTER INITIALIZED");
+}
+
+void ParticleFilter::init_pf(){
     particles.resize(num_particles);
     is_initialized = true;
 }
@@ -45,7 +56,7 @@ void UTM2WGS(Eigen::Vector3d &geo, geodesy::UTMPoint utm_point){
 void ParticleFilter::updateWeights(double lat,double lon,double alt, Eigen::Matrix<float,4,1> q,std::vector<Plane>planes
     , std::vector<Sat_info>sat){
     if(!initialized()){
-        init();
+        init_pf();
     }
     //transformation matrix from end to body frame
     C_N2B = quat2dcm(q);
@@ -106,7 +117,11 @@ void ParticleFilter::updateWeights(double lat,double lon,double alt, Eigen::Matr
                Point p_sat (sat_pos[0],sat_pos[1],sat_pos[2]);
                Point p_intersect = linePlaneIntersection(p_mir,p_sat,planes[j]);
             
-               //validate intersec point within this plane
+               /*-----------------------------------------
+                 validate intersec point within this plane
+                 calculate the estimated pesudorange
+                 this part need to be improved
+                -----------------------------------------*/
                if(p_intersect._z>planes[j].z_max||p_intersect._z<planes[j].z_min)
                {
                   double tmp_psr = point2point(p_lidar,p_sat);
@@ -128,9 +143,33 @@ void ParticleFilter::updateWeights(double lat,double lon,double alt, Eigen::Matr
     }
 
     //assign weight for all particles based on its error.
-
+    //Gaussain distrbution and maen believed to be zero, variation is 0.5
+    double sum_weight = 0.0;
+    for(auto &p:particles){
+        p.weight = exp(-pow(id_error[p.id],2)/SIGMA_P);
+        sum_weight += p.weight;
+    }
 
     //calculate average position data
+    double avr_e=0.0,avr_n=0.0;
+    for(const auto &p :particles){
+        avr_e += p.x * (p.weight/sum_weight);
+        avr_n += p.y * (p.weight/sum_weight);
+    }
+    
+    //TRANSLATE FROM UTM TO WGS
+    geodesy::UTMPoint avr_utm(avr_e,avr_n,utm_original_point.altitude,utm_original_point.zone,utm_original_point.band);
+    Eigen::Vector3d avr_geo;
+    UTM2WGS(avr_geo,avr_utm);
+
+    //publish post navigation gps
+    sensor_msgs::NavSatFix post_nav_msg;
+    post_nav_msg.header = restore_.header;
+    post_nav_msg.status = restore_.status;
+    post_nav_msg.latitude = avr_geo[0];
+    post_nav_msg.longitude = avr_geo[1];
+    post_nav_msg.altitude = avr_geo[2];
+    _pub_nav.publish(post_nav_msg);
 }
 
 void ParticleFilter::updateWeights(){
@@ -172,6 +211,8 @@ void ParticleFilter::updateSat (const gnss_cal::gnssCalConstPtr &gps_msg){
 //update position info from gps
 void ParticleFilter::updateGps(const sensor_msgs::NavSatFixConstPtr &pos_msg){
     std::unique_lock<std::shared_timed_mutex> lock(shMutex);
+    restore_.header=pos_msg->header;
+    restore_.status=pos_msg->status;
     lat = pos_msg->latitude;
     lon = pos_msg->longitude;
     alt = pos_msg->altitude;
@@ -191,4 +232,13 @@ void ParticleFilter::updateImu(const sensor_msgs::ImuConstPtr &imu_msg){
     q(2,0) = imu_msg->orientation.y;
     q(3,0) = imu_msg->orientation.z;
     is_imu_update = true;
+}
+
+
+int main(int argc,char*argv[]){
+    ros::init(argc,argv,"particle filter");
+    ros::NodeHandle nh("~");
+    ParticleFilter pf (nh);
+    pf.spin();
+    return 0;
 }
