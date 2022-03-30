@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 2.8.3)
 project(gnss_cal)
 
 set(CMAKE_BUILD_TYPE "release")
-set(CMAKE_CXX_FLAGS "-std=c++11 ")
+set(CMAKE_CXX_FLAGS "-std=c++17 ")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3 -Wall -fPIC")
 
 find_package(catkin REQUIRED COMPONENTS
@@ -50,3 +50,10 @@ add_executable(${PROJECT_NAME}_node ${PROJECT_SOURCE_DIR}/src/gnss_cal_node.cpp 
 target_link_libraries(${PROJECT_NAME}_node ${catkin_LIBRARIES} ${GLOG_LIBRARIES} )
 add_executable(check_plane_node ${PROJECT_SOURCE_DIR}/src/plane_check_node.cpp )
 target_link_libraries(check_plane_node ${catkin_LIBRARIES}  ${PCL_LIBRARIES})
+
+
+
+add_executable(ekf_node ${PROJECT_SOURCE_DIR}/src/ekf_filter_node.cpp 
+                        ${PROJECT_SOURCE_DIR}/src/ekf.cpp 
+                        ${PROJECT_SOURCE_DIR}/src/ekf_filter.cpp)
+target_link_libraries(ekf_node ${catkin_LIBRARIES} ${EIGEN3_INCLUDE_DIR})
