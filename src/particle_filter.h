@@ -78,6 +78,7 @@ public:
     void spin(){
         ros::spin();
     }
+    
     /*deconstructor*/
     ~ParticleFilter(){}
     
