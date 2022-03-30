@@ -24,7 +24,7 @@ class Point{
 public:
    Point(double x,double y,double z):_x(x),_y(y),_z(z){
     }
-   Point();
+   Point(){};
    double _x;
    double _y;
    double _z;

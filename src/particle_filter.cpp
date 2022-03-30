@@ -44,12 +44,12 @@ void ParticleFilter::WGS2UTM(const double &lat,const double &lon,const double &a
 }
 
 //translate from utm to wgs
-void UTM2WGS(Eigen::Vector3d &geo, geodesy::UTMPoint utm_point){
+void ParticleFilter::UTM2WGS(Eigen::Vector3d &geo, geodesy::UTMPoint utm_point){
     geographic_msgs::GeoPoint geo_msg;
     geo_msg = geodesy::toMsg(utm_point);
-    geo[0]=geo_msg.latitude;
-    geo[1]=geo_msg.longitude;
-    geo[2]=geo_msg. altitude;
+    geo(0)=geo_msg.latitude;
+    geo(1)=geo_msg.longitude;
+    geo(2)=geo_msg. altitude;
 }
 
 //core function, calculate weight about particles
@@ -96,15 +96,16 @@ void ParticleFilter::updateWeights(double lat,double lon,double alt, Eigen::Matr
             double psr_mea = sat[i].psr;
 
             Eigen::Vector3d sat_ecef;
-            sat_ecef[0]=sat[i].ecefX;
-            sat_ecef[1]=sat[i].ecefY;
-            sat_ecef[2]=sat[i].ecefZ;
+            sat_ecef(0)=sat[i].ecefX;
+            sat_ecef(1)=sat[i].ecefY;
+            sat_ecef(2)=sat[i].ecefZ;
             Eigen::Vector3d sat_end;
             sat_end = ecef2ned(sat_ecef,ecef_p);
             
             //position of satellite in body frame 
             Eigen::Vector3d sat_pos;
-            sat_pos = C_N2B*sat_end;
+            Eigen::Matrix<double,3,3>R=C_N2B.cast<double>();
+            sat_pos = R*sat_end;
             
             
 
@@ -114,7 +115,7 @@ void ParticleFilter::updateWeights(double lat,double lon,double alt, Eigen::Matr
                //do mirror about this planes
                Point p_mir;
                p_mir = mirror(p_lidar,planes[i]);
-               Point p_sat (sat_pos[0],sat_pos[1],sat_pos[2]);
+               Point p_sat (sat_pos(0),sat_pos(1),sat_pos(2));
                Point p_intersect = linePlaneIntersection(p_mir,p_sat,planes[j]);
             
                /*-----------------------------------------
@@ -166,20 +167,20 @@ void ParticleFilter::updateWeights(double lat,double lon,double alt, Eigen::Matr
     sensor_msgs::NavSatFix post_nav_msg;
     post_nav_msg.header = restore_.header;
     post_nav_msg.status = restore_.status;
-    post_nav_msg.latitude = avr_geo[0];
-    post_nav_msg.longitude = avr_geo[1];
-    post_nav_msg.altitude = avr_geo[2];
+    post_nav_msg.latitude = avr_geo(0);
+    post_nav_msg.longitude = avr_geo(1);
+    post_nav_msg.altitude = avr_geo(2);
     _pub_nav.publish(post_nav_msg);
 }
 
 void ParticleFilter::updateWeights(){
-    std::unique_lock<std::shared_timed_mutex> lock(shMutex);
+    std::unique_lock lock(shMutex);
     updateWeights(lat,lon,alt,q,planes,sat);
 }
 
 //update the Plane infomation
 void ParticleFilter::updateLidar(const gnss_cal::detect_planesConstPtr &plane_msg){
-    std::unique_lock<std::shared_timed_mutex> lock(shMutex);
+    std::unique_lock lock(shMutex);
     planes.clear();
     for(auto it : plane_msg->Coeff){
         Plane p(it.a,it.b,it.c,it.d,it.z_max,it.z_min);
@@ -191,7 +192,7 @@ void ParticleFilter::updateLidar(const gnss_cal::detect_planesConstPtr &plane_ms
 
 //update the satellite positio infomation
 void ParticleFilter::updateSat (const gnss_cal::gnssCalConstPtr &gps_msg){
-    std::unique_lock<std::shared_timed_mutex> lock(shMutex);
+    std::unique_lock lock(shMutex);
     //clear the previous info about satellite's position
     sat.clear();
     for(auto &it:gps_msg->meas){
@@ -210,7 +211,7 @@ void ParticleFilter::updateSat (const gnss_cal::gnssCalConstPtr &gps_msg){
 
 //update position info from gps
 void ParticleFilter::updateGps(const sensor_msgs::NavSatFixConstPtr &pos_msg){
-    std::unique_lock<std::shared_timed_mutex> lock(shMutex);
+    std::unique_lock lock(shMutex);
     restore_.header=pos_msg->header;
     restore_.status=pos_msg->status;
     lat = pos_msg->latitude;
@@ -226,7 +227,7 @@ void ParticleFilter::updateGps(const sensor_msgs::NavSatFixConstPtr &pos_msg){
 
 //From imu's quaternion to get matrix from enu to body frame
 void ParticleFilter::updateImu(const sensor_msgs::ImuConstPtr &imu_msg){
-    std::unique_lock<std::shared_timed_mutex> lock(shMutex);
+    std::unique_lock lock(shMutex);
     q(0,0) = imu_msg->orientation.w;
     q(1,0) = imu_msg->orientation.x;
     q(2,0) = imu_msg->orientation.y;
@@ -236,7 +237,7 @@ void ParticleFilter::updateImu(const sensor_msgs::ImuConstPtr &imu_msg){
 
 
 int main(int argc,char*argv[]){
-    ros::init(argc,argv,"particle filter");
+    ros::init(argc,argv,"particle_filter");
     ros::NodeHandle nh("~");
     ParticleFilter pf (nh);
     pf.spin();

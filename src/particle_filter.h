@@ -20,7 +20,7 @@
 
 class Particle{
 public:
-    Particle();
+    Particle(){};
     int id;
     double x;
     double y;
@@ -34,7 +34,7 @@ struct Pos_info{
     double lon;
     double alt;
 };
-using gpsPosDataPtr = std::shared_ptr<Pos_info>;
+
 
 class Sat_info{
 public:
@@ -58,7 +58,7 @@ struct detected_planes{
     uint64_t detect_time;
     std::vector<Coefficient> planes;
 };
-using detectPlanePtr = std::shared_ptr<detected_planes>;
+
 
 struct SatelliteInfo{
     uint64_t sat_time;
@@ -122,11 +122,9 @@ private:
     //numbers of particles
     int num_particles;
     std::vector<Particle> particles;
-    detectPlanePtr pPlane;
-    gpsPosDataPtr pGps;
     double lat=0.0,lon=0.0,alt=0.0;
     //Flag 
-    mutable std::shared_timed_mutex shMutex;
+    mutable std::shared_mutex shMutex;
     bool is_gps_update = false;
     bool is_lidar_update = false;
     bool is_imu_update = false;
@@ -143,7 +141,7 @@ private:
     Eigen::Matrix<float,4,1> q;
     //original point
     geodesy::UTMPoint utm_original_point;
-    std::vector<int>grid={-6,-4,-2,0,2,4,6};
+    std::vector<double>grid={-6.0,-4.0,-2.0,0.0,2.0,4.0,6.0};
 
     //NavSatFix restore
     sensor_msgs::NavSatFix restore_;
