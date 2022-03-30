@@ -14,6 +14,7 @@ find_package(catkin REQUIRED COMPONENTS
   gnss_comm
   message_generation
   pcl_ros
+  geodesy
 )
 
 file(GLOB_RECURSE message_files ${PROJECT_SOURCE_DIR}/msg/*.msg)
@@ -48,6 +49,7 @@ include_directories(
 
 add_executable(${PROJECT_NAME}_node ${PROJECT_SOURCE_DIR}/src/gnss_cal_node.cpp )
 target_link_libraries(${PROJECT_NAME}_node ${catkin_LIBRARIES} ${GLOG_LIBRARIES} )
+
 add_executable(check_plane_node ${PROJECT_SOURCE_DIR}/src/plane_check_node.cpp )
 target_link_libraries(check_plane_node ${catkin_LIBRARIES}  ${PCL_LIBRARIES})
 
@@ -56,4 +58,9 @@ target_link_libraries(check_plane_node ${catkin_LIBRARIES}  ${PCL_LIBRARIES})
 add_executable(ekf_node ${PROJECT_SOURCE_DIR}/src/ekf_filter_node.cpp 
                         ${PROJECT_SOURCE_DIR}/src/ekf.cpp 
                         ${PROJECT_SOURCE_DIR}/src/ekf_filter.cpp)
+
 target_link_libraries(ekf_node ${catkin_LIBRARIES} ${EIGEN3_INCLUDE_DIR})
+
+
+add_executable(pf_node ${PROJECT_SOURCE_DIR}/src/particle_filter.cpp )
+target_link_libraries(pf_node ${catkin_LIBRARIES}  ${EIGEN3_INCLUDE_DIR})
