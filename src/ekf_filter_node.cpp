@@ -15,5 +15,5 @@ int main (int argc, char** argv) {
     GpsImuVelFilter ekf_localizer(nh);
 
     ros::spin();
-    return 1;
+    return 0;
 }

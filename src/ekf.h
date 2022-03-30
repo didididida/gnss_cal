@@ -163,7 +163,7 @@ class ekfNav{
    imuDataPtr pImuDat;
    magDataPtr pMagDat;
    
-   mutable std::shared_timed_mutex shMutex;
+   mutable std::shared_mutex shMutex;
    bool initialized_ = false;
    bool is_gps_pos_initialized = false;
    bool is_gps_vel_initialized = false;
@@ -198,7 +198,7 @@ class ekfNav{
    //process noise transfromation
    Eigen::Matrix<float,15,12>Gs = Eigen::Matrix<float,15,12>::Zero();
 
-   Eigen::Matrix<float,15,12>Rw = Eigen::Matrix<float,15,12>::Zero();
+   Eigen::Matrix<float,12,12>Rw = Eigen::Matrix<float,12,12>::Zero();
 
    //process noise Matrix
    Eigen::Matrix<float,15,15>Q = Eigen::Matrix<float,15,15>::Zero();
@@ -215,12 +215,12 @@ class ekfNav{
    Eigen::Matrix<float,3,3> C_B2N = Eigen::Matrix<float,3,3>::Zero();
    // to get dxdt
    Eigen::Matrix<float,3,1> dx = Eigen::Matrix<float,3,1>::Zero();
-   Eigen::Matrix<float,3,1> dxd = Eigen::Matrix<float,3,1>::Zero();
+   Eigen::Matrix<double,3,1> dxd = Eigen::Matrix<double,3,1>::Zero();
 
    //estimated INS
-   Eigen::Matrix<float,3,1>estimated_ins = Eigen::Matrix<float,3,1>::Zero();
+   Eigen::Matrix<double,3,1>estimated_ins = Eigen::Matrix<double,3,1>::Zero();
    //NED velocity INS
-   Eigen::Matrix<float,3,1>V_ins = Eigen::Matrix<float,3,1>::Zero();
+   Eigen::Matrix<double,3,1>V_ins = Eigen::Matrix<double,3,1>::Zero();
     // LLA INS
    Eigen::Matrix<double,3,1> lla_ins = Eigen::Matrix<double,3,1>::Zero();
    // NED velocity GPS

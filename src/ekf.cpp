@@ -130,7 +130,7 @@ void ekfNav::ekf_update( uint64_t time/*, unsigned long TOW*/, double vn,double 
   }
 
 void ekfNav::ekf_update(uint64_t time) {
-  std::shared_lock<std::shared_timed_mutex> lock(shMutex);
+  std::shared_lock lock(shMutex);
   ekf_update(time, /*0,*/  pGpsVelDat->vN, pGpsVelDat->vE, pGpsVelDat->vD,
                       pGpsPosDat->lat, pGpsPosDat->lon, pGpsPosDat->alt,
                       pImuDat->gyroX, pImuDat->gyroY, pImuDat->gyroZ,
@@ -140,7 +140,7 @@ void ekfNav::ekf_update(uint64_t time) {
 
 bool ekfNav::imuDataUpdateEKF(const imuDataPtr imu, ekfState* ekfOut) {
   {
-    std::unique_lock<std::shared_timed_mutex> lock(shMutex);
+    std::unique_lock lock(shMutex);
     pImuDat = imu;
     is_imu_initialized = true;
   }
@@ -164,21 +164,21 @@ bool ekfNav::imuDataUpdateEKF(const imuDataPtr imu, ekfState* ekfOut) {
 }
 
 void ekfNav::magDataUpdateEKF(const magDataPtr mag) {
-  std::unique_lock<std::shared_timed_mutex> lock(shMutex);
+  std::unique_lock<std::shared_mutex> lock(shMutex);
   pMagDat = mag;
   is_mag_initialized = true;
 }
 
 
 void ekfNav::gpsPosDataUpdateEKF(const gpsPosDataPtr pos) {
-  std::unique_lock<std::shared_timed_mutex> lock(shMutex);
+  std::unique_lock lock(shMutex);
   pGpsPosDat = pos;
   is_gps_pos_initialized = true;
 }
 
 
 void ekfNav::gpsVelDataUpdateEKF(const gpsVelDataPtr vel) {
-  std::unique_lock<std::shared_timed_mutex> lock(shMutex);
+  std::unique_lock<std::shared_mutex> lock(shMutex);
   pGpsVelDat = vel;
   is_gps_vel_initialized = true;
 }
