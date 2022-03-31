@@ -12,12 +12,13 @@
 #include <thread>
 #include <ros/callback_queue.h>
 #include <mutex>
+#include <shared_mutex>
 #include "gnss_cal/gnssCal.h"
 #include "gnss_cal/gnssToU.h"
 
 
-std::mutex iono_mu; //mutex for ionosphere
-std::mutex pos_mu;
+std::shared_mutex iono_mu; //mutex for ionosphere
+std::shared_mutex pos_mu;
 
 std::unordered_map<uint32_t,std::vector<gnss_comm::EphemBasePtr>>sat2ephem;//ephemris map
 std::unordered_map<uint32_t,std::map<double,size_t>>sat2time_index;
@@ -66,27 +67,26 @@ void ionoparam_cb(const gnss_comm::StampedFloat64ArrayConstPtr &ionoparam_msg){
 
 //update the newest iono parameters
 void inputIonoParam(double ts,std::vector<double>&iono_param){
-  
     if(iono_param.size()!=8)return;
-    iono_mu.lock();
+    std::unique_lock lock(iono_mu);
     last_iono_param.clear();
     std::copy(iono_param.begin(),iono_param.end(),std::back_inserter(last_iono_param));
-    iono_mu.unlock();
 }
 
 void reclla_cb(const sensor_msgs::NavSatFixConstPtr &recmsg){
-     pos_mu.lock();
+     std::unique_lock lock(pos_mu);
      pos_ecef = {recmsg->latitude,recmsg->longitude,recmsg->altitude};
-     pos_mu.unlock();
 }
 
 void rangemeas_cb(const gnss_comm::GnssMeasMsgConstPtr &meas_msg){
 
     std::vector<gnss_comm::ObsPtr> gnss_meas = gnss_comm::msg2meas(meas_msg);
     gnss_cal::gnssCal msg;
-    pos_mu.lock();
-    Eigen::Vector3d pos = pos_ecef;
-    pos_mu.unlock();
+    Eigen::Vector3d pos;
+    {
+        std::shared_lock lock(pos_mu);
+        pos = pos_ecef;
+    }
 
     
     for(auto obs:gnss_meas){
@@ -159,11 +159,11 @@ void rangemeas_cb(const gnss_comm::GnssMeasMsgConstPtr &meas_msg){
         Eigen::Vector3d rcv_lla = gnss_comm::ecef2geo(pos);
         gnss_comm::sat_azel(pos,sat_ecef,azel);
         trop_delay = gnss_comm::calculate_trop_delay(obs->time,rcv_lla,azel);
-
-        iono_mu.lock();
-        iono_delay = gnss_comm::calculate_ion_delay(obs->time,last_iono_param,rcv_lla,azel);
-        iono_mu.unlock();
-
+        
+        {
+            std::shared_lock lock(iono_mu);
+            iono_delay = gnss_comm::calculate_ion_delay(obs->time,last_iono_param,rcv_lla,azel);
+        }
         //calculated pseudorange, eliminate the error of iono, trop, group delay 
         //and satellite clock drift.
         double psr = obs->psr[freq_idx]-trop_delay-iono_delay+svdt*LIGHT_SPEED-tgd*LIGHT_SPEED;    

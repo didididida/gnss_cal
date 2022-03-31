@@ -174,7 +174,7 @@ void ParticleFilter::updateWeights(double lat,double lon,double alt, Eigen::Matr
 }
 
 void ParticleFilter::updateWeights(){
-    std::unique_lock lock(shMutex);
+    std::shared_lock lock(shMutex);
     updateWeights(lat,lon,alt,q,planes,sat);
 }
 

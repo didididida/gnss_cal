@@ -13,7 +13,6 @@ int main (int argc, char** argv) {
     
     // Initialize localizer.
     GpsImuVelFilter ekf_localizer(nh);
-
     ros::spin();
     return 0;
 }
