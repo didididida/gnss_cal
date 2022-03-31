@@ -115,6 +115,23 @@ Point linePlaneIntersection(const Point&p1,const Point&p2,const Plane& plane){
       return pointIntersection;
 }
 
+bool isIntersect(const Point&p1,const Point& p2,Plane& plane){
+     Point p = linePlaneIntersection(p1,p2,plane);
+     if(p._z<plane.z_min||p._z>plane.z_max)
+     return false;
+     else return true;
+}
+
+bool isOnline(const Point&p1,const Point& p2, Point&p){
+
+      if(p._x>std::min(p1._x,p2._x)&&p._x<std::max(p1._x,p2._x)
+      &&p._y>std::min(p1._y,p2._y)&&p._y<std::max(p1._y,p2._y)
+      &&p._z>std::min(p1._z,p2._z)&&p._z<std::max(p1._z,p2._z)){
+        return true;
+      }else{
+        return false;
+      }
+}
 /*
 Below are functions about transformation between different coordinate system
 const double d2r = M_PI/180.0;

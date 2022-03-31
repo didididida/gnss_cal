@@ -107,33 +107,57 @@ void ParticleFilter::updateWeights(double lat,double lon,double alt, Eigen::Matr
             Eigen::Matrix<double,3,3>R=C_N2B.cast<double>();
             sat_pos = R*sat_end;
             
-            
+            Point p_sat (sat_pos(0),sat_pos(1),sat_pos(2));
 
-            /*For each plane detected by lidar*/
-            for(int j=0;j<planes.size();j++){
-
-               //do mirror about this planes
-               Point p_mir;
-               p_mir = mirror(p_lidar,planes[i]);
-               Point p_sat (sat_pos(0),sat_pos(1),sat_pos(2));
-               Point p_intersect = linePlaneIntersection(p_mir,p_sat,planes[j]);
-            
-               /*-----------------------------------------
+            /*-----------------------------------------
                  validate intersec point within this plane
                  calculate the estimated pesudorange
                  this part need to be improved
-                -----------------------------------------*/
-               if(p_intersect._z>planes[j].z_max||p_intersect._z<planes[j].z_min)
-               {
-                  double tmp_psr = point2point(p_lidar,p_sat);
-                  psr_estimated = std::min(psr_estimated,tmp_psr);
-               }
-               else
-               {
-                  double tmp_psr = point2point(p_mir,p_sat);
-                  psr_estimated = std::min(psr_estimated,tmp_psr);
-               }
+            -----------------------------------------*/
+
+            // if this plane is blocked or not
+            bool is_blocked = false;
+            std::set<int>block_index;
+
+            for(int j=0;j<planes.size();j++){
+                //intersect between lidar and sat
+                if(isIntersect(p_lidar,p_sat,planes[j])){
+                    is_blocked = true;
+                    block_index.insert(j);
+                }
             }
+            
+            //Calculate The NLOS Psudorange
+            // If satellite is not blocked by all planes
+
+            if(!is_blocked){
+                psr_estimated = point2point(p_lidar,p_sat);
+
+            }else{
+                
+                for(int j=0;j<planes.size();j++){
+                    
+                   //block by this plane skip it
+                   if(block_index.count(j)){
+                    continue;
+                   }
+
+                   //do mirror about unblocked planes
+                   Point p_mir;
+                   p_mir = mirror(p_lidar,planes[i]);
+
+                   Point p_intersect = linePlaneIntersection(p_mir,p_sat,planes[j]);
+
+                   if(isIntersect(p_mir,p_sat,planes[j])&&isOnline(p_mir,p_sat,p_intersect))
+                   {
+                       double tmp_psr = point2point(p_mir,p_sat);
+                       psr_estimated = std::min(psr_estimated,tmp_psr);
+                   }
+                   
+                }
+               
+            }
+
         
             double error = abs(psr_estimated-psr_mea);
             sum_error += error;
