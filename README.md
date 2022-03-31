@@ -21,5 +21,5 @@ The whole project aims to improve the accuracy of GNSS with the help of lidar. M
 + Every rosnode can be executed seperately.
 + set topic's name before excution 
 ```
-roslaunch gnss_cal 
+roslaunch gnss_cal gnss_ekf_imu_pf.launch
 ```
