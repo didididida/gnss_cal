@@ -25,3 +25,4 @@ roslaunch gnss_cal gnss_ekf_imu_pf.launch
 ```
 ## literature
 https://link.springer.com/chapter/10.1007/978-981-16-6324-6_51
+https://discovery.ucl.ac.uk/id/eprint/1394968/1/ION_GNSS13_B6_2_Groves_et_al_1_0%20(NLOS).pdf
