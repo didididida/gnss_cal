@@ -23,3 +23,5 @@ The whole project aims to improve the accuracy of GNSS with the help of lidar. M
 ```
 roslaunch gnss_cal gnss_ekf_imu_pf.launch
 ```
+## literature
+https://link.springer.com/chapter/10.1007/978-981-16-6324-6_51
