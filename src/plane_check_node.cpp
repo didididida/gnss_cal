@@ -55,7 +55,7 @@ public:
     _name = ros::this_node::getName();
 
     // get publish
-    _subs = _nh.subscribe("/livox/lidar",1,&planeFilter::pointCloudCb,this);
+    _subs = _nh.subscribe("/laser_cloud_map",1,&planeFilter::pointCloudCb,this);
     _pub_inliers = _nh.advertise< sensor_msgs::PointCloud2 >("inliers",2);
     _pub_coefficient = _nh.advertise<gnss_cal::detect_planes>("planes_coefficient",1);
     
@@ -113,7 +113,7 @@ public:
         // Check result
         if (inliers->indices.size() == 0)
             break;
-        if (inliers->indices.size() >= 0.1 * original_size)
+        if (inliers->indices.size() >= 0.02 * original_size)
              small_plane = false;
         else small_plane = true;
         
@@ -249,7 +249,7 @@ private:
 
     // Algorithm parameters
     double _min_percentage = 5;
-    double _max_distance = 0.005;
+    double _max_distance = 0.05;
 
     // Colors
     std::vector<Color> colors;

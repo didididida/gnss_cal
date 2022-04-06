@@ -138,20 +138,27 @@ void rangemeas_cb(const gnss_comm::GnssMeasMsgConstPtr &meas_msg){
                     freq2_idx = i;
             }
         }
+
+
+        //Miltipath estimated Mp;
+        double Mp = 0.0;
+
         if(freq2_idx<0)
         {
             ROS_INFO("No frequence L2");
-            continue;
-        }
-        
+        }else{
+
         //carrier phase for diffrent frequency
         double CP_1 = obs->cp[freq_idx];
         double CP_2 = obs->cp[freq2_idx];
         
         double a = pow(CP_1,2)/(pow(CP_1,2)-pow(CP_2,2));
-        //Miltipath estimated Mp;
+        
         //Mp here includes multipath error and noise
-        double Mp = obs->psr[freq_idx]- CP_1 + 2*a*(CP_1-CP_2);
+        Mp = obs->psr[freq_idx]- CP_1 + 2*a*(CP_1-CP_2);
+
+        }
+        
 
         double obs_time = gnss_comm::time2sec(obs->time);
 
