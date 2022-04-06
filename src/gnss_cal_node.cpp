@@ -95,7 +95,7 @@ void rangemeas_cb(const gnss_comm::GnssMeasMsgConstPtr &meas_msg){
         uint32_t sys = gnss_comm::satsys(obs->sat,NULL);
 
         //only process gps/bds/gal/glo
-        if(sys!=SYS_GPS&&sys!=SYS_BDS&&sys!=SYS_GAL) //&&sys!=SYS_GLO)
+        if(sys!=SYS_GPS&&sys!=SYS_BDS&&sys!=SYS_GAL&&sys!=SYS_GLO)
         continue;
         
         //To count the number of satellites
@@ -123,10 +123,16 @@ void rangemeas_cb(const gnss_comm::GnssMeasMsgConstPtr &meas_msg){
         }else if(sys ==SYS_GAL){
             freq_1 = FREQ1;
             freq_2 = FREQ5;
+        } else if (sys == SYS_GLO)
+        {
+           freq_1 = FREQ2_GLO - 7 * DFRQ2_GLO;
+           freq_2 = FREQ2_GLO + 6 * DFRQ2_GLO;
         }
         
         int freq_idx = -1;
         gnss_comm::L1_freq(obs,&freq_idx);
+        
+        // no L1, discard
         if(freq_idx<0)continue;
 
         // find the index for L2/BD2/E5
@@ -146,6 +152,7 @@ void rangemeas_cb(const gnss_comm::GnssMeasMsgConstPtr &meas_msg){
         if(freq2_idx<0)
         {
             ROS_INFO("No frequence L2");
+
         }else{
 
         //carrier phase for diffrent frequency
