@@ -1,4 +1,5 @@
 #include <ros/ros.h>
+#include <ros/console.h>
 #include <sstream>
 #include <math.h>
 #include "gnss_comm/GnssEphemMsg.h"
@@ -103,42 +104,39 @@ void rangemeas_cb(const gnss_comm::GnssMeasMsgConstPtr &meas_msg){
         continue;
         if(obs->freqs.empty())continue;
        
-        
-        /*calculte multipath erorr (Attention not NLOS here)
-          according to a paper upload in the github 
-          make true reciever can recieve more than one band   
-        */
-        double freq_1 = 0.0;
-        double freq_2 = 0.0;
-
-        if(sys==SYS_GPS){
-            freq_1 = FREQ1;
-            freq_2 = FREQ2;
-        }else if(sys==SYS_BDS){
-            freq_1 = FREQ1_BDS;
-            freq_2 = FREQ2_BDS;
-        }else if(sys== SYS_GLO){
-            freq_1 = FREQ1_GLO;
-            freq_2 = FREQ2_GLO;
-        }else if(sys ==SYS_GAL){
-            freq_1 = FREQ1;
-            freq_2 = FREQ5;
-        } else if (sys == SYS_GLO)
-        {
-           freq_1 = FREQ2_GLO - 7 * DFRQ2_GLO;
-           freq_2 = FREQ2_GLO + 6 * DFRQ2_GLO;
-        }
-        
         int freq_idx = -1;
         gnss_comm::L1_freq(obs,&freq_idx);
         
         // no L1, discard
         if(freq_idx<0)continue;
 
+        /*calculte multipath erorr (Attention not NLOS here)
+          according to a paper upload in the github 
+          make true reciever can recieve more than one band   
+        */
+        double freq_2_min = 0.0;
+        double freq_2_max = 0.0;
+
+        if(sys==SYS_GPS){
+            freq_2_min = FREQ2;
+            freq_2_max = FREQ2;
+        }else if(sys==SYS_BDS){
+            freq_2_min = FREQ2_BDS;
+            freq_2_max = FREQ2_BDS;
+        }else if(sys ==SYS_GAL){
+            freq_2_min = FREQ5;
+            freq_2_max = FREQ5;
+        } else if (sys == SYS_GLO)
+        {
+           freq_2_min = FREQ2_GLO - 7 * DFRQ2_GLO;
+           freq_2_max = FREQ2_GLO + 6 * DFRQ2_GLO;
+        }
+        
+
         // find the index for L2/BD2/E5
         int freq2_idx = -1;
         for(int i = 0;i<obs->freqs.size();i++){
-             if (obs->freqs[i] >= freq_1 && obs->freqs[i] <= freq_2)
+             if (obs->freqs[i] >= freq_2_min && obs->freqs[i] <= freq_2_max)
             {
                 if (freq2_idx != NULL)
                     freq2_idx = i;
@@ -158,11 +156,12 @@ void rangemeas_cb(const gnss_comm::GnssMeasMsgConstPtr &meas_msg){
         //carrier phase for diffrent frequency
         double CP_1 = obs->cp[freq_idx];
         double CP_2 = obs->cp[freq2_idx];
-        
-        double a = pow(CP_1,2)/(pow(CP_1,2)-pow(CP_2,2));
-        
+
+        double a =2*pow(obs->freqs[freq2_idx],2)/(pow(obs->freqs[freq_idx],2)-pow(obs->freqs[freq2_idx],2));
+        double b = (pow(obs->freqs[freq_idx],2)+pow(obs->freqs[freq2_idx],2))/(pow(obs->freqs[freq_idx],2)-pow(obs->freqs[freq2_idx],2));
         //Mp here includes multipath error and noise
-        Mp = obs->psr[freq_idx]- CP_1 + 2*a*(CP_1-CP_2);
+        Mp = obs->psr[freq_idx]- CP_1*b + a*CP_2;
+        ROS_INFO("Multipath: %f",Mp);
 
         }
         
