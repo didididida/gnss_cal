@@ -138,7 +138,7 @@ void rangemeas_cb(const gnss_comm::GnssMeasMsgConstPtr &meas_msg){
         // find the index for L2/BD2/E5
         int freq2_idx = -1;
         for(int i = 0;i<obs->freqs.size();i++){
-             if (obs->freqs[i] >= freq_2 && obs->freqs[i] <= freq_2)
+             if (obs->freqs[i] >= freq_1 && obs->freqs[i] <= freq_2)
             {
                 if (freq2_idx != NULL)
                     freq2_idx = i;

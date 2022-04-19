@@ -15,6 +15,7 @@
 #include <pcl/features/boundary.h>
 #include <pcl/features/normal_3d.h>
 #include <pcl/common/common.h>
+#include <pcl/filters/statistical_outlier_removal.h>
 //msg
 #include "gnss_cal/detect_planes.h"
 #include "gnss_cal/single_plane.h"
@@ -80,10 +81,31 @@ public:
     pcl::PassThrough<pcl::PointXYZ> pass;
     pass.setInputCloud(cloud_msg);
     pass.setFilterFieldName ("z");
-    pass.setFilterLimits(0.001,10000);
-    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud (new pcl::PointCloud<pcl::PointXYZ>);
-    pass.filter (*cloud);
+    pass.setFilterLimits(-0.1,10000);
+    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_1 (new pcl::PointCloud<pcl::PointXYZ>);
+    pass.filter (*cloud_1);
+    
+    pcl::PassThrough<pcl::PointXYZ> pass_2;
+    pass_2.setInputCloud(cloud_1);
+    pass_2.setFilterFieldName ("x");
+    pass_2.setFilterLimits(-20,100);
+    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_2 (new pcl::PointCloud<pcl::PointXYZ>);
+    pass_2.filter (*cloud_2);
 
+    pcl::PassThrough<pcl::PointXYZ> pass_3;
+    pass_3.setInputCloud(cloud_2);
+    pass_3.setFilterFieldName ("y");
+    pass_3.setFilterLimits(-15,15);
+    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_3 (new pcl::PointCloud<pcl::PointXYZ>);
+    pass_3.filter (*cloud_3);
+
+
+    pcl::StatisticalOutlierRemoval<pcl::PointXYZ> sor;
+    sor.setInputCloud(cloud_3);
+    sor.setMeanK(50);
+    sor.setStddevMulThresh(1.0);
+    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud (new pcl::PointCloud<pcl::PointXYZ>);
+    sor.filter(*cloud);
 
     // Get segmentation ready
     pcl::ModelCoefficients::Ptr coefficients(new pcl::ModelCoefficients);
@@ -113,7 +135,7 @@ public:
         // Check result
         if (inliers->indices.size() == 0)
             break;
-        if (inliers->indices.size() >= 0.02 * original_size)
+        if (inliers->indices.size() >= 0.11 * original_size)
              small_plane = false;
         else small_plane = true;
         
@@ -249,7 +271,7 @@ private:
 
     // Algorithm parameters
     double _min_percentage = 5;
-    double _max_distance = 0.05;
+    double _max_distance = 0.27;
 
     // Colors
     std::vector<Color> colors;
