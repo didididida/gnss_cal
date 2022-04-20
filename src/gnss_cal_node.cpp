@@ -153,16 +153,18 @@ void rangemeas_cb(const gnss_comm::GnssMeasMsgConstPtr &meas_msg){
 
         }else{
 
-        //carrier phase for diffrent frequency
-        double CP_1 = obs->cp[freq_idx];
-        double CP_2 = obs->cp[freq2_idx];
 
-        double a =2*pow(obs->freqs[freq2_idx],2)/(pow(obs->freqs[freq_idx],2)-pow(obs->freqs[freq2_idx],2));
-        double b = (pow(obs->freqs[freq_idx],2)+pow(obs->freqs[freq2_idx],2))/(pow(obs->freqs[freq_idx],2)-pow(obs->freqs[freq2_idx],2));
+        //carrier phase for diffrent frequency
+        double CP_1 = obs->cp[freq_idx]*(1.0/obs->freqs[freq_idx]);
+        double CP_2 = obs->cp[freq2_idx]*(1.0/obs->freqs[freq2_idx]);
+        CP_1 = CP_1*LIGHT_SPEED;
+        CP_2 = CP_2*LIGHT_SPEED;
+        ROS_INFO("Multipath: %f,%f",CP_1,CP_2);
+        double a =pow(obs->freqs[freq2_idx],2)/(pow(obs->freqs[freq_idx],2)-pow(obs->freqs[freq2_idx],2));
+        //double b = (pow(obs->freqs[freq_idx],2)+pow(obs->freqs[freq2_idx],2))/(pow(obs->freqs[freq_idx],2)-pow(obs->freqs[freq2_idx],2));
         //Mp here includes multipath error and noise
-        Mp = obs->psr[freq_idx]- CP_1*b + a*CP_2;
-        ROS_INFO("Multipath: %f",Mp);
-        Mp = obs->psr[freq_idx]-CP_1 + a*(CP_1-CP_2);
+        if(CP_1!=0&&CP_2!=0)
+        Mp = obs->psr[freq_idx]-CP_1 + 2* a*(CP_1-CP_2);
         ROS_INFO("Multipath: %f",Mp);
         }
         
