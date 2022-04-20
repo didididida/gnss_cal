@@ -153,7 +153,6 @@ void rangemeas_cb(const gnss_comm::GnssMeasMsgConstPtr &meas_msg){
 
         }else{
 
-
         //carrier phase for diffrent frequency
         double CP_1 = obs->cp[freq_idx]*(1.0/obs->freqs[freq_idx]);
         double CP_2 = obs->cp[freq2_idx]*(1.0/obs->freqs[freq2_idx]);
