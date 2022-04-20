@@ -162,7 +162,8 @@ void rangemeas_cb(const gnss_comm::GnssMeasMsgConstPtr &meas_msg){
         //Mp here includes multipath error and noise
         Mp = obs->psr[freq_idx]- CP_1*b + a*CP_2;
         ROS_INFO("Multipath: %f",Mp);
-
+        Mp = obs->psr[freq_idx]-CP_1 + a*(CP_1-CP_2);
+        ROS_INFO("Multipath: %f",Mp);
         }
         
 
