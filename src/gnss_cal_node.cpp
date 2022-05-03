@@ -17,14 +17,14 @@
 #include "gnss_cal/gnssCal.h"
 #include "gnss_cal/gnssToU.h"
 
-
+#define GNSS_ELEVATION_THRESHOLD 15
 std::shared_mutex iono_mu; //mutex for ionosphere
 std::shared_mutex pos_mu;
 
 std::unordered_map<uint32_t,std::vector<gnss_comm::EphemBasePtr>>sat2ephem;//ephemris map
 std::unordered_map<uint32_t,std::map<double,size_t>>sat2time_index;
 std::vector<double>last_iono_param;
-Eigen::Vector3d pos_ecef;
+Eigen::Vector3d pos_lla;
 //used in particle filter
 std::unordered_map<int,std::pair<Eigen::Vector3d,double>>ref_map;
 
@@ -76,19 +76,20 @@ void inputIonoParam(double ts,std::vector<double>&iono_param){
 
 void reclla_cb(const sensor_msgs::NavSatFixConstPtr &recmsg){
      std::unique_lock lock(pos_mu);
-     pos_ecef = {recmsg->latitude,recmsg->longitude,recmsg->altitude};
+     pos_lla = {recmsg->latitude,recmsg->longitude,recmsg->altitude};
 }
 
 void rangemeas_cb(const gnss_comm::GnssMeasMsgConstPtr &meas_msg){
 
     std::vector<gnss_comm::ObsPtr> gnss_meas = gnss_comm::msg2meas(meas_msg);
     gnss_cal::gnssCal msg;
-    Eigen::Vector3d pos;
+
+    Eigen::Vector3d pos_ecef;
     {
         std::shared_lock lock(pos_mu);
-        pos = pos_ecef;
+        pos_ecef = gnss_comm::geo2ecef(pos_lla);
     }
-
+    
     
     for(auto obs:gnss_meas){
        
@@ -98,17 +99,32 @@ void rangemeas_cb(const gnss_comm::GnssMeasMsgConstPtr &meas_msg){
         //only process gps/bds/gal/glo
         if(sys!=SYS_GPS&&sys!=SYS_BDS&&sys!=SYS_GAL&&sys!=SYS_GLO)
         continue;
-        
+        //calculate the elevation, if less than 15 degree, discard
         //To count the number of satellites
         if(gnss_comm::satsys(obs->sat,NULL)==0)
         continue;
         if(obs->freqs.empty())continue;
-       
+         
+
         int freq_idx = -1;
         gnss_comm::L1_freq(obs,&freq_idx);
         
         // no L1, discard
         if(freq_idx<0)continue;
+        //no ephemeris continue
+        if(!sat2time_index.count(obs->sat)){
+            ROS_WARN("wait for %i-th satellite's ephemris data....",obs->sat);
+            continue;
+        }
+        //no ionosphere parameters, break
+        if(last_iono_param.empty()){
+            ROS_WARN("wait for ionosphere parameters");
+            return;
+        }
+        if(!pos_ecef.any()){
+            ROS_WARN("wait for receiver's position");
+            return;
+        }
 
         /*calculte multipath erorr (Attention not NLOS here)
           according to a paper upload in the github 
@@ -116,6 +132,12 @@ void rangemeas_cb(const gnss_comm::GnssMeasMsgConstPtr &meas_msg){
         */
         double freq_2_min = 0.0;
         double freq_2_max = 0.0;
+        //troposphere delay
+        double trop_delay = 0.0;
+        //ionosphere delay
+        double iono_delay = 0.0;
+        //Miltipath estimated Mp;
+        double Mp = 0.0;
 
         if(sys==SYS_GPS){
             freq_2_min = FREQ2;
@@ -143,16 +165,11 @@ void rangemeas_cb(const gnss_comm::GnssMeasMsgConstPtr &meas_msg){
             }
         }
 
-
-        //Miltipath estimated Mp;
-        double Mp = 0.0;
-
         if(freq2_idx<0)
         {
             ROS_INFO("No frequence L2");
 
         }else{
-
         //carrier phase for diffrent frequency
         double CP_1 = obs->cp[freq_idx]*(1.0/obs->freqs[freq_idx]);
         double CP_2 = obs->cp[freq2_idx]*(1.0/obs->freqs[freq2_idx]);
@@ -165,24 +182,13 @@ void rangemeas_cb(const gnss_comm::GnssMeasMsgConstPtr &meas_msg){
         if(CP_1!=0&&CP_2!=0)
         Mp = obs->psr[freq_idx]-CP_1 + 2* a*(CP_1-CP_2);
         ROS_INFO("Multipath: %f",Mp);
+        
+        //dual-frequency to calculate ionosphere delay
+        iono_delay = a*(obs->psr[freq_idx]-obs->psr[freq2_idx]);
+        
         }
         
-
         double obs_time = gnss_comm::time2sec(obs->time);
-
-        if(!sat2time_index.count(obs->sat)){
-            ROS_WARN("wait for %i-th satellite's ephemris data....",obs->sat);
-            continue;
-        }
-        if(last_iono_param.empty()){
-            ROS_WARN("wait for ionosphere parameters");
-            return;
-        }
-        if(!pos.any()){
-            ROS_WARN("wait for receiver's position");
-            return;
-        }
-
         std::map<double, size_t>time2index = sat2time_index.at(obs->sat);
         double ephem_time = EPH_VALID_SECONDS;
         size_t ephem_index = -1;
@@ -212,29 +218,35 @@ void rangemeas_cb(const gnss_comm::GnssMeasMsgConstPtr &meas_msg){
             tgd = (std::dynamic_pointer_cast<gnss_comm::Ephem>(best_ephem))->tgd[0];
         }
         
-        //calculate the ionosphere delay and troposphere delay
-        double iono_delay = 0;
-       
        
         double azel[2] = {0, M_PI/2.0};
-        Eigen::Vector3d rcv_lla = gnss_comm::ecef2geo(pos);
-        gnss_comm::sat_azel(pos,sat_ecef,azel);
-        double trop_delay = 0.0;
+        gnss_comm::sat_azel(pos_ecef,sat_ecef,azel);
+        //if elevation angle is small than threshold, discard
+        if(azel[1]<GNSS_ELEVATION_THRESHOLD*M_PI/180.0){
+            continue;
+        }
+        
+        Eigen::Vector3d rcv_lla = gnss_comm::ecef2geo(pos_ecef);
+        //calculate troposphere delay
         trop_delay = gnss_comm::calculate_trop_delay(obs->time,rcv_lla,azel);
         
+        //if no dual-frequency, use klobuchar model to estimate iono_delay
+        if(freq2_idx<0)
         {
             std::shared_lock lock(iono_mu);
             iono_delay = gnss_comm::calculate_ion_delay(obs->time,last_iono_param,rcv_lla,azel);
         }
+
         //calculated pseudorange, eliminate the error of iono, trop, group delay 
         //and satellite clock drift.
+        //receiver clock offset not included here
         double psr = obs->psr[freq_idx]- trop_delay - iono_delay+svdt*LIGHT_SPEED-tgd*LIGHT_SPEED;    
         //eliminate the estimated mulipath error
-        psr -= Mp;
         gnss_cal::gnssToU submsg;
         submsg.CN0 = obs->CN0;
         submsg.psr = psr;
         submsg.sat = obs->sat;
+        submsg.mp = Mp;
         submsg.ecefX = sat_ecef[0];
         submsg.ecefY = sat_ecef[1];
         submsg.ecefZ = sat_ecef[2];
