@@ -89,7 +89,9 @@ void rangemeas_cb(const gnss_comm::GnssMeasMsgConstPtr &meas_msg){
         std::shared_lock lock(pos_mu);
         pos_ecef = gnss_comm::geo2ecef(pos_lla);
     }
-    
+   
+    // lla position
+    Eigen::Vector3d rcv_lla = gnss_comm::ecef2geo(pos_ecef);
     
     for(auto obs:gnss_meas){
        
@@ -111,7 +113,7 @@ void rangemeas_cb(const gnss_comm::GnssMeasMsgConstPtr &meas_msg){
         
         // no L1, discard
         if(freq_idx<0)continue;
-        //no ephemeris continue
+        //no ephemeris for this satellite continue
         if(!sat2time_index.count(obs->sat)){
             ROS_WARN("wait for %i-th satellite's ephemris data....",obs->sat);
             continue;
@@ -226,7 +228,7 @@ void rangemeas_cb(const gnss_comm::GnssMeasMsgConstPtr &meas_msg){
             continue;
         }
         
-        Eigen::Vector3d rcv_lla = gnss_comm::ecef2geo(pos_ecef);
+        
         //calculate troposphere delay
         trop_delay = gnss_comm::calculate_trop_delay(obs->time,rcv_lla,azel);
         
@@ -252,6 +254,9 @@ void rangemeas_cb(const gnss_comm::GnssMeasMsgConstPtr &meas_msg){
         submsg.ecefZ = sat_ecef[2];
         msg.meas.push_back(submsg);
     }
+    msg.latitude = rcv_lla[0];
+    msg.longitude =rcv_lla[1];
+    msg.altitude = rcv_lla[2];
     pub.publish(msg);
 }
 
