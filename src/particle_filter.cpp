@@ -2,7 +2,7 @@
 
 
 void ParticleFilter::init_ros(){
-    _sub_gps = _nh.subscribe("/ublox/gps",1,&ParticleFilter::updateGps,this);
+    //_sub_gps = _nh.subscribe("/ublox/gps",1,&ParticleFilter::updateGps,this);
     _sub_imu = _nh.subscribe("/imu",1,&ParticleFilter::updateImu,this);
     _sub_lidar = _nh.subscribe("/plane",1,&ParticleFilter::updateLidar,this);
     _sub_sat = _nh.subscribe("/sat",1,&ParticleFilter::updateSat,this);
@@ -11,46 +11,34 @@ void ParticleFilter::init_ros(){
     ROS_INFO("ROSNODE FOR PARTICLE FILTER INITIALIZED");
 }
 
+// in enu coordinate system, scatter particles in 3D
 void ParticleFilter::init_pf(){
-    particles.resize(num_particles);
+    //particles.resize(num_particles);
+    for(int i=0;i<7;i++){
+        for(int j=0;j<7;j++){
+            enu_p.push_back({grid[i],grid[j],0});
+            enu_p.push_back({grid[i],grid[j],-2});
+            enu_p.push_back({grid[i],grid[j],2});
+        }
+    }
     is_initialized = true;
 }
 
-//scatter particles around GPS position
-void ParticleFilter::scatter(){
-int count = 0;
-for(int i=0;i<7;i++){
-    for(int j=0;j<7;j++){
+//scatter particles around position
+//particles in enu already know.
+void ParticleFilter::scatter(const Eigen::Vector3d& pos_lla){
+std::vector<Eigen::Vector3d> particles_ecef;
+for(int i=0;i<enu_p.size();i++){
+    Eigen::Vector3d p_ecef;
+    p_ecef = enu2ecef(enu_p[i],pos_lla);
     Particle p;
-    p.x = utm_original_point.easting+grid[i];
-    p.y = utm_original_point.northing+grid[j];
-    p.z=utm_original_point.altitude;
-    p.weight = 0;
-    p.id = count;
-    particles[count]=p;
-    count++;
-    }
- }
+    p.id=i;
+    p.p_ecef=p_ecef;
+    p.weight=1;
+    particles.push_back(p);
+  }
 }
 
-
-//translate from wgs to utm
-void ParticleFilter::WGS2UTM(const double &lat,const double &lon,const double &alt){
-    geographic_msgs::GeoPointStampedPtr geo_msg(new geographic_msgs::GeoPointStamped);
-    geo_msg->position.latitude = lat;
-    geo_msg->position.longitude =lon;
-    geo_msg->position.altitude = alt;
-    geodesy::fromMsg(geo_msg->position,utm_original_point);
-}
-
-//translate from utm to wgs
-void ParticleFilter::UTM2WGS(Eigen::Vector3d &geo, geodesy::UTMPoint utm_point){
-    geographic_msgs::GeoPoint geo_msg;
-    geo_msg = geodesy::toMsg(utm_point);
-    geo(0)=geo_msg.latitude;
-    geo(1)=geo_msg.longitude;
-    geo(2)=geo_msg. altitude;
-}
 
 //core function, calculate weight about particles
 void ParticleFilter::updateWeights(double lat,double lon,double alt, Eigen::Matrix<float,4,1> q,std::vector<Plane>planes
@@ -58,39 +46,55 @@ void ParticleFilter::updateWeights(double lat,double lon,double alt, Eigen::Matr
     if(!initialized()){
         init_pf();
     }
-    //transformation matrix from end to body frame
+    //transformation MATRIX from end to body frame
     C_N2B = quat2dcm(q);
 
-    //translate wsg into utm 
-    WGS2UTM(lat,lon,alt);
+    Eigen::Vector3d pos_ecef;
+    Eigen::Vector3d pos_lla;
+    //translate from lla to ecef for gps raw data
+    pos_lla={lat,lon,alt};
 
-    //scatter around utm position
-    scatter();
+    //scatter around enu's origin
+    //return particles in ecef
+    scatter(pos_lla);
      
     //hashmap to store estimated psudorange
     std::unordered_map<int,double> id_error;
 
     /*for each particle do ray-tracing process*/
-  for (const auto &p :particles){
-    //from utm to wgs, geo_p is particle's position in wgs;
-    Eigen::Vector3d geo_p;
-    geodesy::UTMPoint utm_p(p.x,p.y,utm_original_point.altitude,utm_original_point.zone,utm_original_point.band);
-    UTM2WGS(geo_p,utm_p);
-    
-    //in ecef coordinate system
-    Eigen::Vector3d ecef_p;
-    ecef_p = lla2ecef(geo_p);
-    
-    //position for lidar in lidar's own system
-    Point p_lidar(0,0,0);
+    for (const auto &p :particles){
 
-    //average error about psudorange
-    double avr_error = 0.0;
-    double sum_error = 0.0;
-            /*For each satellite do ray-tracing*/
-            for(int i=0;i<sat.size();i++){
+        //in ecef coordinate system
+        Eigen::Vector3d ecef_p;
+        ecef_p = p.p_ecef;
+        //position for lidar in lidar's system
+        Point p_lidar(0,0,0);
 
+        //average error about psudorange
+        double avr_error = 0.0;
+        double sum_error = 0.0;
 
+        //record the max elevation's satellite as reference statellite.
+        double max_ele = 0.0;
+        double ref_rcv_clock = 0;
+        for(int i=0;i<sat.size();i++){
+            double azel[2] = {0, M_PI/2.0};
+            Eigen::Vector3d sat_ecef;
+            sat_ecef(0)=sat[i].ecefX;
+            sat_ecef(1)=sat[i].ecefY;
+            sat_ecef(2)=sat[i].ecefZ;
+            gnss_comm::sat_azel(ecef_p,sat_ecef,azel);
+            if(azel[1]>max_ele){
+                max_ele = azel[1];
+                Eigen::Vector3d tmp;
+                tmp = sat_ecef - ecef_p;
+                ref_rcv_clock = sat[i].psr-sat[i].mp - tmp.norm();
+            }
+        }
+        
+        /*For each satellite do ray-tracing*/
+        for(int i=0;i<sat.size();i++){
+            
             // estimated pseudorange
             double psr_estimated = DBL_MAX;
             double psr_mea = sat[i].psr;
@@ -176,24 +180,24 @@ void ParticleFilter::updateWeights(double lat,double lon,double alt, Eigen::Matr
     }
 
     //calculate average position data
-    double avr_e=0.0,avr_n=0.0;
+    Eigen::Vector3d avr_pos;
+    avr_pos.setZero();
     for(const auto &p :particles){
-        avr_e += p.x * (p.weight/sum_weight);
-        avr_n += p.y * (p.weight/sum_weight);
+        avr_pos.x() += p.p_ecef.x() * (p.weight/sum_weight);
+        avr_pos.y() += p.p_ecef.y() * (p.weight/sum_weight);
+        avr_pos.z() += p.p_ecef.z() * (p.weight/sum_weight);
     }
     
-    //TRANSLATE FROM UTM TO WGS
-    geodesy::UTMPoint avr_utm(avr_e,avr_n,utm_original_point.altitude,utm_original_point.zone,utm_original_point.band);
-    Eigen::Vector3d avr_geo;
-    UTM2WGS(avr_geo,avr_utm);
-
+   
+    Eigen::Vector3d result;
+    result = gnss_comm::ecef2geo(avr_pos);
     //publish post navigation gps
     sensor_msgs::NavSatFix post_nav_msg;
     post_nav_msg.header = restore_.header;
     post_nav_msg.status = restore_.status;
-    post_nav_msg.latitude = avr_geo(0);
-    post_nav_msg.longitude = avr_geo(1);
-    post_nav_msg.altitude = avr_geo(2);
+    post_nav_msg.latitude = result[0];
+    post_nav_msg.longitude = result[1];
+    post_nav_msg.altitude = result[2];
     _pub_nav.publish(post_nav_msg);
 }
 
@@ -230,10 +234,20 @@ void ParticleFilter::updateSat (const gnss_cal::gnssCalConstPtr &gps_msg){
         sat.push_back(s);
     }
     is_sat_update = true;
-    ROS_INFO("GPS LOCATION UPDATE");
+    ROS_INFO("satellite info UPDATE");
+    lat = gps_msg->latitude;
+    lon = gps_msg->longitude;
+    alt = gps_msg->altitude;
+    ROS_INFO("raw location update");
+    is_gps_update = true;
+    if(is_gps_update&&is_imu_update&&is_lidar_update&&is_sat_update){
+        updateWeights();
+    }else{
+        return;
+    }
 }
 
-//update position info from gps
+/*/update position info from gps
 void ParticleFilter::updateGps(const sensor_msgs::NavSatFixConstPtr &pos_msg){
     std::unique_lock lock(shMutex);
     restore_.header=pos_msg->header;
@@ -248,6 +262,7 @@ void ParticleFilter::updateGps(const sensor_msgs::NavSatFixConstPtr &pos_msg){
         return;
     }
 }
+*/
 
 //From imu's quaternion to get matrix from enu to body frame
 void ParticleFilter::updateImu(const sensor_msgs::ImuConstPtr &imu_msg){

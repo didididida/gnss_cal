@@ -18,13 +18,12 @@
 #include <unordered_map>
 #include <random>
 
+
 class Particle{
 public:
     Particle(){};
     int id;
-    double x;
-    double y;
-    double z;
+    Eigen::Vector3d p_ecef;
     double weight;
 };
 
@@ -44,6 +43,7 @@ public:
     double ecefX;
     double ecefY;
     double ecefZ;
+    double mp;
 };
 
 struct Coefficient{
@@ -63,6 +63,9 @@ struct detected_planes{
 struct SatelliteInfo{
     uint64_t sat_time;
     std::vector<Sat_info> sat_pos;
+    double lat;
+    double lon;
+    double alt;
 };
 
 
@@ -91,11 +94,8 @@ public:
     void updateWeights();
 
     /*scatter particles around gps pos*/
-    void scatter();
+    void scatter(const Eigen::Vector3d& pos_lla);
     
-    void WGS2UTM(const double &lat,const double &lon,const double &alt);
-
-    void UTM2WGS(Eigen::Vector3d &geo, geodesy::UTMPoint utm_point);
     /* initialized Returns whether particle filter is initialized yet or not.*/
     const bool initialized() const {
         return is_initialized;
@@ -135,14 +135,12 @@ private:
     Eigen::Matrix<float,3,3> C_N2B;
     // variation of pseudorange's error
     double SIGMA_P = 0.5;
-    //position in UTM
-    Eigen::Vector3d UTM;
+
     //quoternion
     Eigen::Matrix<float,4,1> q;
-    //original point
-    geodesy::UTMPoint utm_original_point;
+   
     std::vector<double>grid={-6.0,-4.0,-2.0,0.0,2.0,4.0,6.0};
-
+    std::vector<Eigen::Vector3d> enu_p;
     //NavSatFix restore
     sensor_msgs::NavSatFix restore_;
     

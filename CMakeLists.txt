@@ -15,6 +15,11 @@ find_package(catkin REQUIRED COMPONENTS
   message_generation
   pcl_ros
   geodesy
+  pcl_conversions
+  eigen_conversions
+  message_filters
+  std_srvs
+
 )
 
 file(GLOB_RECURSE message_files ${PROJECT_SOURCE_DIR}/msg/*.msg)

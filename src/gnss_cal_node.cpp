@@ -195,6 +195,7 @@ void rangemeas_cb(const gnss_comm::GnssMeasMsgConstPtr &meas_msg){
         double ephem_time = EPH_VALID_SECONDS;
         size_t ephem_index = -1;
 
+
         for(auto it:time2index){
             if(abs(obs_time-it.first)<ephem_time){
                 ephem_time = abs(obs_time-it.first);
