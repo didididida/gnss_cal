@@ -3,6 +3,7 @@
 #include <ros/publisher.h>
 #include <sensor_msgs/PointCloud2.h>
 #include <dynamic_reconfigure/server.h>
+
 //PCL
 #include <pcl_ros/point_cloud.h>
 #include <pcl/point_types.h>
@@ -16,9 +17,20 @@
 #include <pcl/features/normal_3d.h>
 #include <pcl/common/common.h>
 #include <pcl/filters/statistical_outlier_removal.h>
+#include <pcl_ros/transforms.h>
+#include <pcl/common/transforms.h>
+#include <pcl/conversions.h>
+#include <pcl_ros/impl/transforms.hpp>
+
 //msg
 #include "gnss_cal/detect_planes.h"
 #include "gnss_cal/single_plane.h"
+//tf
+#include <tf/transform_listener.h>
+#include <tf/message_filter.h>
+#include <message_filters/time_synchronizer.h>
+#include <message_filters/subscriber.h>
+
 
 class Color{
 private:
@@ -56,7 +68,12 @@ public:
     _name = ros::this_node::getName();
 
     // get publish
-    _subs = _nh.subscribe("/laser_cloud_map",1,&planeFilter::pointCloudCb,this);
+   
+    //_subs = _nh.subscribe("/laser_cloud_map",1,&planeFilter::pointCloudCb,this);
+    _sub_pointcloud = new message_filters::Subscriber<sensor_msgs::PointCloud2>(_nh,"/laser_cloud_map",100);
+    _sub_tf = new tf::MessageFilter<sensor_msgs::PointCloud2>(*_sub_pointcloud,tf_listener,"/camera_init",100);
+    _sub_tf->registerCallback(boost::bind(&planeFilter::pointCloudCb, this, _1));
+
     _pub_inliers = _nh.advertise< sensor_msgs::PointCloud2 >("inliers",2);
     _pub_coefficient = _nh.advertise<gnss_cal::detect_planes>("planes_coefficient",1);
     
@@ -70,43 +87,61 @@ public:
    
     void pointCloudCb(const sensor_msgs::PointCloud2::ConstPtr &msg){
      
-     //convert to pcl point cloud
-     pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_msg (new pcl::PointCloud<pcl::PointXYZ>);
-     pcl::fromROSMsg(*msg,*cloud_msg);
-     ROS_INFO("%s: new ponitcloud (%i,%i)(%zu)",_name.c_str(),cloud_msg->width,cloud_msg->height,
-     cloud_msg->size());
-
+    //convert to pcl point cloud
+    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_msg (new pcl::PointCloud<pcl::PointXYZ>);
+    pcl::fromROSMsg(*msg,*cloud_msg);
+    ROS_INFO("%s: new ponitcloud (%i,%i)(%zu)",_name.c_str(),cloud_msg->width,cloud_msg->height,
+    cloud_msg->size());
 
     //filter cloud
     pcl::PassThrough<pcl::PointXYZ> pass;
     pass.setInputCloud(cloud_msg);
     pass.setFilterFieldName ("z");
-    pass.setFilterLimits(-0.1,10000);
+    pass.setFilterLimits(0.7,10000);
     pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_1 (new pcl::PointCloud<pcl::PointXYZ>);
     pass.filter (*cloud_1);
     
     pcl::PassThrough<pcl::PointXYZ> pass_2;
     pass_2.setInputCloud(cloud_1);
     pass_2.setFilterFieldName ("x");
-    pass_2.setFilterLimits(-20,100);
+    pass_2.setFilterLimits(-20,65);
     pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_2 (new pcl::PointCloud<pcl::PointXYZ>);
     pass_2.filter (*cloud_2);
 
     pcl::PassThrough<pcl::PointXYZ> pass_3;
     pass_3.setInputCloud(cloud_2);
     pass_3.setFilterFieldName ("y");
-    pass_3.setFilterLimits(-15,15);
+    pass_3.setFilterLimits(-10,10);
     pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_3 (new pcl::PointCloud<pcl::PointXYZ>);
     pass_3.filter (*cloud_3);
+ 
 
 
     pcl::StatisticalOutlierRemoval<pcl::PointXYZ> sor;
     sor.setInputCloud(cloud_3);
     sor.setMeanK(50);
     sor.setStddevMulThresh(1.0);
-    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud (new pcl::PointCloud<pcl::PointXYZ>);
-    sor.filter(*cloud);
+    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_world (new pcl::PointCloud<pcl::PointXYZ>);
+    sor.filter(*cloud_world);
 
+    
+    tf::StampedTransform WorldToSensorTF;
+    try
+    {
+        tf_listener.lookupTransform("aft_mapped","camera_init",msg->header.stamp,WorldToSensorTF);
+
+    }
+    catch(tf::TransformException &ex)
+    {
+        ROS_ERROR_STREAM("Transform error of sensor data: " << ex.what() << ", quitting callback");
+        return;
+    }
+
+    Eigen::Matrix4f worldToSensor;
+    pcl_ros::transformAsMatrix(WorldToSensorTF,worldToSensor);
+    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud (new pcl::PointCloud<pcl::PointXYZ>);
+    pcl::transformPointCloud(*cloud_world,*cloud,worldToSensor);
+    
     // Get segmentation ready
     pcl::ModelCoefficients::Ptr coefficients(new pcl::ModelCoefficients);
     pcl::PointIndices::Ptr inliers(new pcl::PointIndices);
@@ -125,17 +160,17 @@ public:
     int original_size(cloud->height*cloud->width);
     int n_planes(0);
     gnss_cal::detect_planes planes_msg;
+   
     // To segment multi-planes in point cloud
     while(cloud->height*cloud->width>=_min_percentage*original_size/100){
         
         // Fit a plane
         seg.setInputCloud(cloud);
         seg.segment(*inliers, *coefficients);
-
         // Check result
         if (inliers->indices.size() == 0)
             break;
-        if (inliers->indices.size() >= 0.11 * original_size)
+        if (inliers->indices.size() >= 0.075 * original_size)
              small_plane = false;
         else small_plane = true;
         
@@ -167,39 +202,7 @@ public:
             cloud_pub->points.push_back(pt_color);
         }
         
-        /* get boundary info
-        int average_height = 0;
-        pcl::PointCloud<pcl::Boundary> boundary;
-        pcl::BoundaryEstimation<pcl::PointXYZ,pcl::Normal,pcl::Boundary>est;
-        pcl::NormalEstimation<pcl::PointXYZ,pcl::Normal>normEst;
-        pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_boudary(new pcl::PointCloud<pcl::PointXYZ>);
-        pcl::PointCloud<pcl::Normal>::Ptr normals(new pcl::PointCloud<pcl::Normal>);
         
-        //find the heighest point 
-        
-        normEst.setInputCloud(plane_cloud);
-        normEst.setRadiusSearch(1);
-        normEst.compute(*normals);
-        est.setInputCloud(plane_cloud);
-        est.setInputNormals(normals);
-        est.setRadiusSearch(1);
-        est.setAngleThreshold(M_PI/4);
-        est.setSearchMethod(pcl::search::KdTree<pcl::PointXYZ>::Ptr (new pcl::search::KdTree<pcl::PointXYZ>));
-        est.compute(boundary);
-        
-        int count = 0;
-        //calculate the average height
-        for(int i = 0;i<plane_cloud->points.size();i++){
-            // boundary
-            if(boundary[i].boundary_point>0&&abs(plane_cloud->points[i].z - pmax.z)<0.05*pmax.z){
-            average_height+=plane_cloud->points[i].z;
-            count++;
-            }
-        }
-        // average_height of this plane
-        if(count!=0)
-        average_height /=count;
-        */
         pcl::PointCloud<pcl::PointXYZ>::Ptr plane_cloud(new pcl::PointCloud<pcl::PointXYZ>);
         pcl::copyPointCloud(*cloud,inliers->indices,*plane_cloud);
         pcl::PointXYZ pmin;
@@ -257,7 +260,11 @@ public:
     void spin(){
         ros::spin();
     }
-
+    
+    ~planeFilter(){
+        delete _sub_pointcloud;
+        delete _sub_tf;
+    }
 
 private:
     ros::NodeHandle _nh;
@@ -267,7 +274,12 @@ private:
     ros::Publisher _pub_inliers;// Display inliers for each plane
     ros::Publisher _pub_coefficient;
     // Subscriber
-    ros::Subscriber _subs;
+    //ros::Subscriber _subs;
+    message_filters::Subscriber<sensor_msgs::PointCloud2>*_sub_pointcloud;
+    tf::MessageFilter<sensor_msgs::PointCloud2>*_sub_tf;
+    tf::TransformListener tf_listener;
+
+
 
     // Algorithm parameters
     double _min_percentage = 5;
