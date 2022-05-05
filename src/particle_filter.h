@@ -18,7 +18,6 @@
 #include <unordered_map>
 #include <random>
 
-
 class Particle{
 public:
     Particle(){};

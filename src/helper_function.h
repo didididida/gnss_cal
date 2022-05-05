@@ -279,11 +279,29 @@ Eigen::Matrix<double,3,1> lla2ecef(Eigen::Matrix<double,3,1> lla) {
 }
 
 // This function converts a vector in ecef to ned coordinate centered at pos_ref.
-Eigen::Matrix<double,3,1> ecef2ned(Eigen::Matrix<double,3,1> ecef,Eigen::Matrix<double,3,1> pos_ref) {
+  Eigen::Matrix<double,3,1> ecef2ned(Eigen::Matrix<double,3,1> ecef,Eigen::Matrix<double,3,1> pos_ref) {
   Eigen::Matrix<double,3,1> ned;
   ned(1,0)=-sin(pos_ref(1,0))*ecef(0,0) + cos(pos_ref(1,0))*ecef(1,0);
   ned(0,0)=-sin(pos_ref(0,0))*cos(pos_ref(1,0))*ecef(0,0)-sin(pos_ref(0,0))*sin(pos_ref(1,0))*ecef(1,0)+cos(pos_ref(0,0))*ecef(2,0);
   ned(2,0)=-cos(pos_ref(0,0))*cos(pos_ref(1,0))*ecef(0,0)-cos(pos_ref(0,0))*sin(pos_ref(1,0))*ecef(1,0)-sin(pos_ref(0,0))*ecef(2,0);
   return ned;
+  }
+  
+
+  Eigen::Vector3d enu2ecef(Eigen::Vector3d enu,Eigen::Vector3d lla){
+     Eigen::Matrix<double,3,3>R;
+     R(0,0)=-sin(lla[1]);
+     R(0,1)= cos(lla[1]);
+     R(0,2)= 0;
+     R(1,0)= -sin(lla[0])*cos(lla[1]);
+     R(1,1) = -sin(lla[0])*sin(lla[1]);
+     R(1,2) = cos(lla[1]);
+     R(2,0) = cos(lla[0])*cos(lla[1]);
+     R(2,1) = cos(lla[0])*sin(lla[1]);
+     R(2,2) = sin(lla[0]);
+     Eigen::Vector3d ecef;
+     ecef = R.transpose()*enu;
+     return ecef;
 }
+
 #endif 
