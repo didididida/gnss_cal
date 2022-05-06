@@ -69,3 +69,10 @@ target_link_libraries(ekf_node ${catkin_LIBRARIES} ${EIGEN3_INCLUDE_DIR})
 
 add_executable(pf_node ${PROJECT_SOURCE_DIR}/src/particle_filter.cpp )
 target_link_libraries(pf_node ${catkin_LIBRARIES}  ${EIGEN3_INCLUDE_DIR})
+
+add_executable(test_node ${PROJECT_SOURCE_DIR}/src/test.cpp 
+                   ${PROJECT_SOURCE_DIR}/src/satellite_subscriber.cpp
+                   ${PROJECT_SOURCE_DIR}/src/plane_subscriber.cpp
+                   ${PROJECT_SOURCE_DIR}/src/gnss_subscriber.cpp
+                   ${PROJECT_SOURCE_DIR}/src/imu_subscriber.cpp)
+target_link_libraries(test_node ${catkin_LIBRARIES}  ${EIGEN3_INCLUDE_DIR})
