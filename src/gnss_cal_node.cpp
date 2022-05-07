@@ -83,7 +83,7 @@ void rangemeas_cb(const gnss_comm::GnssMeasMsgConstPtr &meas_msg){
 
     std::vector<gnss_comm::ObsPtr> gnss_meas = gnss_comm::msg2meas(meas_msg);
     gnss_cal::gnssCal msg;
-
+    msg.header.stamp = ros::Time::now();
     Eigen::Vector3d pos_ecef;
     {
         std::shared_lock lock(pos_mu);
@@ -177,7 +177,6 @@ void rangemeas_cb(const gnss_comm::GnssMeasMsgConstPtr &meas_msg){
         double CP_2 = obs->cp[freq2_idx]*(1.0/obs->freqs[freq2_idx]);
         CP_1 = CP_1*LIGHT_SPEED;
         CP_2 = CP_2*LIGHT_SPEED;
-        ROS_INFO("Multipath: %f,%f",CP_1,CP_2);
         double a =pow(obs->freqs[freq2_idx],2)/(pow(obs->freqs[freq_idx],2)-pow(obs->freqs[freq2_idx],2));
         //double b = (pow(obs->freqs[freq_idx],2)+pow(obs->freqs[freq2_idx],2))/(pow(obs->freqs[freq_idx],2)-pow(obs->freqs[freq2_idx],2));
         //Mp here includes multipath error and noise

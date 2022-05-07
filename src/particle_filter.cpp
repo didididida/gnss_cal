@@ -1,15 +1,134 @@
 #include "particle_filter.h"
 
 
-void ParticleFilter::init_ros(){
-    //_sub_gps = _nh.subscribe("/ublox/gps",1,&ParticleFilter::updateGps,this);
-    _sub_imu = _nh.subscribe("/imu/data",1,&ParticleFilter::updateImu,this);
-    _sub_lidar = _nh.subscribe("/planecheck/planes_coefficient",1,&ParticleFilter::updateLidar,this);
-    _sub_sat = _nh.subscribe("/gnss_post_cal",1,&ParticleFilter::updateSat,this);
-    _pub_nav = _nh.advertise<sensor_msgs::NavSatFix>("post_nav",1);
+Eigen::Matrix<float,3,3> quat2dcm(Eigen::Matrix<float,4,1> q) {
+  Eigen::Matrix<float,3,3> C_N2B;
+  C_N2B(0,0) = 2.0f*powf(q(0,0),2.0f)-1.0f + 2.0f*powf(q(1,0),2.0f);
+  C_N2B(1,1) = 2.0f*powf(q(0,0),2.0f)-1.0f + 2.0f*powf(q(2,0),2.0f);
+  C_N2B(2,2) = 2.0f*powf(q(0,0),2.0f)-1.0f + 2.0f*powf(q(3,0),2.0f);
 
-    ROS_INFO("ROSNODE FOR PARTICLE FILTER INITIALIZED");
+  C_N2B(0,1) = 2.0f*q(1,0)*q(2,0) + 2.0f*q(0,0)*q(3,0);
+  C_N2B(0,2) = 2.0f*q(1,0)*q(3,0) - 2.0f*q(0,0)*q(2,0);
+
+  C_N2B(1,0) = 2.0f*q(1,0)*q(2,0) - 2.0f*q(0,0)*q(3,0);
+  C_N2B(1,2) = 2.0f*q(2,0)*q(3,0) + 2.0f*q(0,0)*q(1,0);
+
+  C_N2B(2,0) = 2.0f*q(1,0)*q(3,0) + 2.0f*q(0,0)*q(2,0);
+  C_N2B(2,1) = 2.0f*q(2,0)*q(3,0) - 2.0f*q(0,0)*q(1,0);
+  return C_N2B;
 }
+// major eccentricity squared
+constexpr double ECC2 = 0.0066943799901;
+// earth semi-major axis radius (m)
+constexpr double EARTH_RADIUS = 6378137.0;
+
+  constexpr std::pair<double, double> earthradius(double lat) {
+  double denom = fabs(1.0 - (ECC2 * pow(sin(lat),2.0)));
+  double Rew = EARTH_RADIUS / sqrt(denom);
+  double Rns = EARTH_RADIUS * (1.0-ECC2) / (denom*sqrt(denom));
+  return (std::make_pair(Rew, Rns));
+}
+
+// This function calculates the ECEF Coordinate given the Latitude, Longitude and Altitude.
+ Eigen::Matrix<double,3,1> lla2ecef(Eigen::Matrix<double,3,1> lla) {
+  double Rew, denom;
+  Eigen::Matrix<double,3,1> ecef;
+  std::tie(Rew, std::ignore) = earthradius(lla(0,0));
+  ecef(0,0) = (Rew + lla(2,0)) * cos(lla(0,0)) * cos(lla(1,0));
+  ecef(1,0) = (Rew + lla(2,0)) * cos(lla(0,0)) * sin(lla(1,0));
+  ecef(2,0) = (Rew * (1.0 - ECC2) + lla(2,0)) * sin(lla(0,0));
+  return ecef;
+}
+
+// This function converts a vector in ecef to ned coordinate centered at pos_ref.
+  Eigen::Matrix<double,3,1> ecef2ned(Eigen::Matrix<double,3,1> ecef,Eigen::Matrix<double,3,1> pos_ref) {
+  Eigen::Matrix<double,3,1> ned;
+  ned(1,0)=-sin(pos_ref(1,0))*ecef(0,0) + cos(pos_ref(1,0))*ecef(1,0);
+  ned(0,0)=-sin(pos_ref(0,0))*cos(pos_ref(1,0))*ecef(0,0)-sin(pos_ref(0,0))*sin(pos_ref(1,0))*ecef(1,0)+cos(pos_ref(0,0))*ecef(2,0);
+  ned(2,0)=-cos(pos_ref(0,0))*cos(pos_ref(1,0))*ecef(0,0)-cos(pos_ref(0,0))*sin(pos_ref(1,0))*ecef(1,0)-sin(pos_ref(0,0))*ecef(2,0);
+  return ned;
+  }
+  
+
+  Eigen::Vector3d enu2ecef(Eigen::Vector3d enu,Eigen::Vector3d lla){
+     Eigen::Matrix<double,3,3>R;
+     R(0,0)=-sin(lla[1]);
+     R(0,1)= cos(lla[1]);
+     R(0,2)= 0;
+     R(1,0)= -sin(lla[0])*cos(lla[1]);
+     R(1,1) = -sin(lla[0])*sin(lla[1]);
+     R(1,2) = cos(lla[1]);
+     R(2,0) = cos(lla[0])*cos(lla[1]);
+     R(2,1) = cos(lla[0])*sin(lla[1]);
+     R(2,2) = sin(lla[0]);
+     Eigen::Vector3d ecef;
+     ecef = R.transpose()*enu;
+     return ecef;
+}
+
+/*get the intersection point between A line and a plane*/
+ Point linePlaneIntersection(const Point&p1,const Point&p2,const Plane& plane){
+      Point pointIntersection;
+      double vpt = plane.normal[0]*(p2._x-p1._x)+plane.normal[1]*(p2._y-p1._y)
+      +plane.normal[2]*(p2._z-p1._z);
+      if(vpt==0){
+            ROS_INFO("LINE IS PARALLEL TO THIS PLANE");
+            pointIntersection._x = DBL_MAX;
+            pointIntersection._y = DBL_MAX;
+            pointIntersection._z = DBL_MAX;
+      }else{
+           double t = ((plane.p._x-p1._x)*plane.normal[0]
+           +(plane.p._y-p1._y)*plane.normal[1]+(plane.p._z-p1._z)*plane.normal[2])/vpt;
+           pointIntersection._x=p1._x+(p2._x-p1._x)*t;
+           pointIntersection._y=p1._y+(p2._y-p1._y)*t;
+           pointIntersection._z=p1._z+(p2._z-p1._z)*t;
+      }
+      return pointIntersection;
+}
+
+ bool isIntersect(const Point&p1,const Point& p2,Plane& plane){
+     Point p = linePlaneIntersection(p1,p2,plane);
+     if(p._z<plane.z_min||p._z>plane.z_max)
+     return false;
+     else return true;
+}
+
+ bool isOnline(const Point&p1,const Point& p2, Point&p){
+
+      if(p._x>std::min(p1._x,p2._x)&&p._x<std::max(p1._x,p2._x)
+      &&p._y>std::min(p1._y,p2._y)&&p._y<std::max(p1._y,p2._y)
+      &&p._z>std::min(p1._z,p2._z)&&p._z<std::max(p1._z,p2._z)){
+        return true;
+      }else{
+        return false;
+      }
+}
+
+ double point2planedistance(const Point&point,const Plane&plane){
+       double f1=fabs(point._x*plane._A+point._y*plane._B+point._z*plane._C+plane._D);
+       double f2=sqrt(pow(plane._A,2)+pow(plane._B,2)+pow(plane._C,2));
+       return f1/f2;
+}
+
+ double point2point(const Point&p1,const Point&p2){
+        double f1 = pow(p1._x-p2._x,2)+pow(p1._y-p2._y,2)+pow(p1._z-p2._z,2);
+        double f2 = sqrt(f1);
+        return f2;
+}
+
+
+
+
+ParticleFilter::ParticleFilter(const Eigen::Matrix<float,4,1>&q, const Eigen::Vector3d &pos_lla){
+    C_N2B = quat2dcm(q);
+    lat = pos_lla[0];
+    lon = pos_lla[1];
+    alt = pos_lla[2];
+    init_pf();
+    lla = {lat,lon,alt};
+    scatter(lla);
+}
+
 
 // in enu coordinate system, scatter particles in 3D
 void ParticleFilter::init_pf(){
@@ -27,7 +146,7 @@ void ParticleFilter::init_pf(){
 //scatter particles around position
 //particles in enu already know.
 void ParticleFilter::scatter(const Eigen::Vector3d& pos_lla){
-std::vector<Eigen::Vector3d> particles_ecef;
+
 for(int i=0;i<enu_p.size();i++){
     Eigen::Vector3d p_ecef;
     p_ecef = enu2ecef(enu_p[i],pos_lla);
@@ -41,23 +160,11 @@ for(int i=0;i<enu_p.size();i++){
 
 
 //core function, calculate weight about particles
-void ParticleFilter::updateWeights(double lat,double lon,double alt, Eigen::Matrix<float,4,1> q,std::vector<Plane>planes
-    , std::vector<Sat_info>sat){
+Eigen::Vector3d ParticleFilter::updateWeights(const ALL_plane &planes, const ALL_sat &sat){
     if(!initialized()){
         init_pf();
     }
-    //transformation MATRIX from end to body frame
-    C_N2B = quat2dcm(q);
 
-    Eigen::Vector3d pos_ecef;
-    Eigen::Vector3d pos_lla;
-    //translate from lla to ecef for gps raw data
-    pos_lla={lat,lon,alt};
-
-    //scatter around enu's origin
-    //return particles in ecef
-    scatter(pos_lla);
-     
     //hashmap to store estimated psudorange
     std::unordered_map<int,double> id_error;
 
@@ -83,25 +190,25 @@ void ParticleFilter::updateWeights(double lat,double lon,double alt, Eigen::Matr
         //hashmap to store elevation for all satellites
         std::unordered_map<int,double>ele_all_sat;
 
-        for(int i=0;i<sat.size();i++){
+        for(int i=0;i<sat.sats.size();i++){
             double azel[2] = {0, M_PI/2.0};
             Eigen::Vector3d sat_ecef;
-            sat_ecef(0)=sat[i].ecefX;
-            sat_ecef(1)=sat[i].ecefY;
-            sat_ecef(2)=sat[i].ecefZ;
+            sat_ecef(0)=sat.sats[i].ecefX;
+            sat_ecef(1)=sat.sats[i].ecefY;
+            sat_ecef(2)=sat.sats[i].ecefZ;
             gnss_comm::sat_azel(ecef_p,sat_ecef,azel);
-            ele_all_sat[sat[i].id] = azel[1];
+            ele_all_sat[sat.sats[i].id] = azel[1];
             if(azel[1]>max_ele){
                 max_ele = azel[1];
                 Eigen::Vector3d tmp;
                 tmp = sat_ecef - ecef_p;
-                ref_rcv_clock = sat[i].psr-sat[i].mp - tmp.norm();
+                ref_rcv_clock = sat.sats[i].psr-sat.sats[i].mp - tmp.norm();
                 ref_index = i;
             }
         }
         
         /*For each satellite do ray-tracing*/
-        for(int i=0;i<sat.size();i++){
+        for(int i=0;i<sat.sats.size();i++){
             
             //reference satellite's error is neglected
             if(i==ref_index)continue;
@@ -109,12 +216,12 @@ void ParticleFilter::updateWeights(double lat,double lon,double alt, Eigen::Matr
             // estimated pseudorange
             double psr_estimated = DBL_MAX;
             // measured pseudorange
-            double psr_mea = sat[i].psr;
+            double psr_mea = sat.sats[i].psr;
 
             Eigen::Vector3d sat_ecef;
-            sat_ecef(0)=sat[i].ecefX;
-            sat_ecef(1)=sat[i].ecefY;
-            sat_ecef(2)=sat[i].ecefZ;
+            sat_ecef(0)=sat.sats[i].ecefX;
+            sat_ecef(1)=sat.sats[i].ecefY;
+            sat_ecef(2)=sat.sats[i].ecefZ;
 
             Eigen::Vector3d sat_enu;
             sat_enu = gnss_comm::ecef2enu(sat_ecef,lla_p);
@@ -136,9 +243,18 @@ void ParticleFilter::updateWeights(double lat,double lon,double alt, Eigen::Matr
                 bool is_blocked = false;
                 std::set<int>block_index;
 
-                for(int j=0;j<planes.size();j++){
+                for(int j=0;j<planes.planes.size();j++){
                 //intersect between lidar and sat
-                     if(isIntersect(p_lidar,p_sat,planes[j])){
+                     Plane p (
+                            planes.planes[j].a,
+                            planes.planes[j].b,
+                            planes.planes[j].c,
+                            planes.planes[j].d,
+                            planes.planes[j].z_max,
+                            planes.planes[j].z_min
+                     );
+
+                     if(isIntersect(p_lidar,p_sat,p)){
                      is_blocked = true;
                      block_index.insert(j);
                      }
@@ -152,15 +268,24 @@ void ParticleFilter::updateWeights(double lat,double lon,double alt, Eigen::Matr
 
                 }else{
                 
-                    for(int j=0;j<planes.size();j++){
+                    for(int j=0;j<planes.planes.size();j++){
                     
                     //block by this plane skip it
                     if(block_index.count(j)){
                     continue;
                     }
                    
-                    double lidar2wall = point2planedistance(p_lidar,planes[j]);
-                    double ele = ele_all_sat[sat[i].id];
+                    Plane p (
+                            planes.planes[j].a,
+                            planes.planes[j].b,
+                            planes.planes[j].c,
+                            planes.planes[j].d,
+                            planes.planes[j].z_max,
+                            planes.planes[j].z_min
+                     );
+                    
+                    double lidar2wall = point2planedistance(p_lidar,p);
+                    double ele = ele_all_sat[sat.sats[i].id];
 
                     if(ele==M_PI/2.0){
                       psr_estimated = 0;
@@ -207,83 +332,8 @@ void ParticleFilter::updateWeights(double lat,double lon,double alt, Eigen::Matr
     Eigen::Vector3d result;
     result = gnss_comm::ecef2geo(avr_pos);
     //publish post navigation gps
-    sensor_msgs::NavSatFix post_nav_msg;
-    post_nav_msg.header = restore_.header;
-    post_nav_msg.status = restore_.status;
-    post_nav_msg.latitude = result[0];
-    post_nav_msg.longitude = result[1];
-    post_nav_msg.altitude = result[2];
-    _pub_nav.publish(post_nav_msg);
-}
-
-void ParticleFilter::updateWeights(){
-    std::shared_lock lock(shMutex);
-    updateWeights(lat,lon,alt,q,planes,sat);
-}
-
-//update the Plane infomation
-void ParticleFilter::updateLidar(const gnss_cal::detect_planesConstPtr &plane_msg){
-    std::unique_lock lock(shMutex);
-    planes.clear();
-    for(auto it : plane_msg->Coeff){
-        Plane p(it.a,it.b,it.c,it.d,it.z_max,it.z_min);
-        planes.push_back(p);
-    }
-    is_lidar_update = true;
-    ROS_INFO("LIDAR INFOMATION UPDATE");
-}
-
-//update the satellite positio infomation
-void ParticleFilter::updateSat (const gnss_cal::gnssCalConstPtr &gps_msg){
-    std::unique_lock lock(shMutex);
-    //clear the previous info about satellite's position
-    sat.clear();
-    for(auto &it:gps_msg->meas){
-        Sat_info s;
-        s.id = it.sat;
-        s.CN0 = it.CN0.at(0);
-        s.ecefX = it.ecefX;
-        s.ecefY =it.ecefY;
-        s.ecefZ = it.ecefZ;
-        s.psr = it.psr;
-        sat.push_back(s);
-    }
-    lat = gps_msg->latitude;
-    lon = gps_msg->longitude;
-    alt = gps_msg->altitude;
-    is_sat_update = true;
-    ROS_INFO("satellite and raw location update");
-    if(is_gps_update&&is_imu_update&&is_lidar_update&&is_sat_update){
-        updateWeights();
-    }else{
-        return;
-    }
-}
-
-//update position info from gps
-void ParticleFilter::updateGps(const sensor_msgs::NavSatFixConstPtr &pos_msg){
-    std::unique_lock lock(shMutex);
-    restore_.header=pos_msg->header;
-    restore_.status=pos_msg->status;
-    is_gps_update = true;
-}
-
-//From imu's quaternion to get matrix from enu to body frame
-void ParticleFilter::updateImu(const sensor_msgs::ImuConstPtr &imu_msg){
-    std::unique_lock lock(shMutex);
-    q(0,0) = imu_msg->orientation.w;
-    q(1,0) = imu_msg->orientation.x;
-    q(2,0) = imu_msg->orientation.y;
-    q(3,0) = imu_msg->orientation.z;
-    is_imu_update = true;
-    ROS_INFO("IMU update");
+    return {result[0],result[1],result[2]};
 }
 
 
-int main(int argc,char*argv[]){
-    ros::init(argc,argv,"particle_filter");
-    ros::NodeHandle nh("~");
-    ParticleFilter pf (nh);
-    pf.spin();
-    return 0;
-}
+
