@@ -105,7 +105,7 @@ constexpr double EARTH_RADIUS = 6378137.0;
 }
 
  double point2planedistance(const Point&point,const Plane&plane){
-       double f1=fabs(point._x*plane._A+point._y*plane._B+point._z*plane._C+plane._D);
+       double f1=abs(point._x*plane._A+point._y*plane._B+point._z*plane._C+plane._D);
        double f2=sqrt(pow(plane._A,2)+pow(plane._B,2)+pow(plane._C,2));
        return f1/f2;
 }
@@ -121,11 +121,10 @@ constexpr double EARTH_RADIUS = 6378137.0;
 
 ParticleFilter::ParticleFilter(const Eigen::Matrix<float,4,1>&q, const Eigen::Vector3d &pos_lla){
     C_N2B = quat2dcm(q);
-    lat = pos_lla[0];
-    lon = pos_lla[1];
-    alt = pos_lla[2];
     init_pf();
-    lla = {lat,lon,alt};
+    lla = pos_lla;
+    ecef = gnss_comm::geo2ecef(lla);
+    if(is_initialized == true)
     scatter(lla);
 }
 
@@ -152,7 +151,7 @@ for(int i=0;i<enu_p.size();i++){
     p_ecef = enu2ecef(enu_p[i],pos_lla);
     Particle p;
     p.id=i;
-    p.p_ecef=p_ecef;
+    p.p_ecef=p_ecef + ecef;
     p.weight=1;
     particles.push_back(p);
   }
@@ -214,7 +213,8 @@ Eigen::Vector3d ParticleFilter::updateWeights(const ALL_plane &planes, const ALL
             if(i==ref_index)continue;
              
             // estimated pseudorange
-            double psr_estimated = DBL_MAX;
+            double min_psr_estimated = DBL_MAX;
+            double psr_estimated = 0.0;
             // measured pseudorange
             double psr_mea = sat.sats[i].psr;
 
@@ -224,15 +224,15 @@ Eigen::Vector3d ParticleFilter::updateWeights(const ALL_plane &planes, const ALL
             sat_ecef(2)=sat.sats[i].ecefZ;
 
             Eigen::Vector3d sat_enu;
-            sat_enu = gnss_comm::ecef2enu(sat_ecef,lla_p);
+            sat_enu = gnss_comm::ecef2enu(lla_p,sat_ecef);
 
             //position of satellite in body frame 
             Eigen::Vector3d sat_local;
             Eigen::Matrix<double,3,3>R=C_N2B.cast<double>();
-            sat_local = R*sat_enu;
-        
+            sat_local =R*sat_enu;
                 Point p_sat (sat_local[0],sat_local[1],sat_local[2]);
-
+                Eigen::Vector3d d;
+                d = ecef_p - sat_ecef;
                 /*-----------------------------------------
                  validate intersec point within this plane
                  calculate the estimated pesudorange
@@ -259,13 +259,11 @@ Eigen::Vector3d ParticleFilter::updateWeights(const ALL_plane &planes, const ALL
                      block_index.insert(j);
                      }
                 }
-            
                 //Calculate The NLOS Psudorange
                 // If satellite is not blocked by all planes
-
                 if(!is_blocked){
-                 psr_estimated = point2point(p_lidar,p_sat)+ref_rcv_clock;
-
+                 min_psr_estimated = d.norm()+ref_rcv_clock;
+        
                 }else{
                 
                     for(int j=0;j<planes.planes.size();j++){
@@ -287,38 +285,42 @@ Eigen::Vector3d ParticleFilter::updateWeights(const ALL_plane &planes, const ALL
                     double lidar2wall = point2planedistance(p_lidar,p);
                     double ele = ele_all_sat[sat.sats[i].id];
 
+                    
+                   
                     if(ele==M_PI/2.0){
-                      psr_estimated = 0;
-                      continue;
+                    psr_estimated = d.norm()+ref_rcv_clock;
                     }
-
-                    double gama1 = lidar2wall/sin(M_PI/2.0-ele);
+                    else{
+                    double gama1 = lidar2wall/(sin(M_PI/2.0-ele));
                     double gama2 = gama1 * cos(2*ele);
                     double delta_psd = gama1 + gama2;
-
-                       if(delta_psd<psr_estimated){
-                        Eigen::Vector3d d;
-                        d = ecef_p - sat_ecef;
-                        psr_estimated = delta_psd+d.norm()+ref_rcv_clock;}
-                    }   
+                    psr_estimated = delta_psd+d.norm()+ref_rcv_clock;
+                    }  
+                   
+                    if(psr_estimated<min_psr_estimated)
+                       {
+                        min_psr_estimated = psr_estimated;
+                       }
+                    
+                    }  
                 }
-
-            double error = abs(psr_estimated-psr_mea);
-            sum_error += error;
            
+            double error = abs(min_psr_estimated-psr_mea);
+            sum_error += error;
         }
         //avr_error = sum_error/sat.size();
         id_error[p.id]=sum_error;
+        
     }
-
+        
         //assign weight for all particles based on its error.
         //Gaussain distrbution and maen believed to be zero, variation is 0.5
         double sum_weight = 0.0;
         for(auto &p:particles){
-        p.weight = exp(-pow(id_error[p.id],2)/SIGMA_P);
+        p.weight = exp(-pow(id_error[p.id],2)/pow(SIGMA_P,2));
         sum_weight += p.weight;
         }
-
+        
         //calculate average position data
         Eigen::Vector3d avr_pos;
         avr_pos.setZero();

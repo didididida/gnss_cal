@@ -52,13 +52,13 @@ private:
     //numbers of particles
     int num_particles;
     std::vector<Particle> particles;
-    double lat=0.0,lon=0.0,alt=0.0;
     Eigen::Vector3d lla;
+    Eigen::Vector3d ecef;
     bool is_initialized =false;
 
     Eigen::Matrix<float,3,3> C_N2B;
     // variation of pseudorange's error
-    double SIGMA_P = 0.5;
+    double SIGMA_P = 100;
 
     //quoternion
     Eigen::Matrix<float,4,1> q;

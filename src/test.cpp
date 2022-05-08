@@ -19,7 +19,7 @@ int main(int argc, char *argv[]){
     std::deque<ALL_plane>plane_data_buff;
     std::deque<ALL_sat>sat_data_buff;
 
-    ros::Rate rate(100);
+    ros::Rate rate(10);
     while(ros::ok()){
         ros::spinOnce();
         gnss_sub_ptr->ParseData(gnss_data_buff);
@@ -38,11 +38,15 @@ int main(int argc, char *argv[]){
         ALL_sat all_sat_data = sat_data_buff.front();
         ALL_plane all_plane_data = plane_data_buff.front();
 
+        //std::cout<<all_plane_data.planes.size()<<std::endl;
+        //std::cout<<std::setprecision(10)<<gnss_data.latitude<<"---"<<gnss_data.longitude<<std::endl;
+        //std::cout<<all_sat_data.sats[0].ecefX<<std::endl;
         double d_time = gnss_data.time - imu_data.time;
         gnss_data_buff.pop_front();
         imu_data_buff.pop_front();
         plane_data_buff.pop_front();
         sat_data_buff.pop_front();
+        
         
         //quoternion
         Eigen::Matrix<float,4,1> q;
@@ -52,13 +56,16 @@ int main(int argc, char *argv[]){
         q(3,0) = imu_data.orientation.z;
 
         Eigen::Vector3d pos_lla;
-        pos_lla = {gnss_data.latitude,gnss_data.longitude,gnss_data.altitude};
+        pos_lla(0) = gnss_data.latitude;
+        pos_lla(1) = gnss_data.longitude;
+        pos_lla(2) = gnss_data.altitude;
+        
         ParticleFilter PF(q,pos_lla);
     
         Eigen::Vector3d post_pos;
         post_pos = PF.updateWeights(all_plane_data,all_sat_data);
         
-        ROS_INFO("%f,%f",post_pos[0],post_pos[1]);
+        std::cout<<std::setprecision(9)<<post_pos[0]<<"---"<<post_pos[1]<<std::endl;;
         
        }
     } 

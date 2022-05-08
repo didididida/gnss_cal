@@ -115,16 +115,16 @@ void rangemeas_cb(const gnss_comm::GnssMeasMsgConstPtr &meas_msg){
         if(freq_idx<0)continue;
         //no ephemeris for this satellite continue
         if(!sat2time_index.count(obs->sat)){
-            ROS_WARN("wait for %i-th satellite's ephemris data....",obs->sat);
+            ROS_INFO("wait for %i-th satellite's ephemris data....",obs->sat);
             continue;
         }
         //no ionosphere parameters, break
         if(last_iono_param.empty()){
-            ROS_WARN("wait for ionosphere parameters");
-            return;
+            ROS_INFO("wait for ionosphere parameters");
+            continue;
         }
         if(!pos_ecef.any()){
-            ROS_WARN("wait for receiver's position");
+            ROS_INFO("wait for receiver's position");
             return;
         }
 
@@ -269,10 +269,10 @@ int main(int argc,char*argv[]){
 
     //subscribe message published by ublox_driver
     //This message includes ephemris
-    ros::Subscriber ephem_sub=nh.subscribe<gnss_comm::GnssEphemMsg>("/ublox_driver/ephem",1,ephem_cb);
-    ros::Subscriber gloephem_sub=nh.subscribe<gnss_comm::GnssGloEphemMsg>("/ublox_driver/glo_ephem",1,gloephem_cb);
-    ros::Subscriber iono_param_sub=nh.subscribe<gnss_comm::StampedFloat64Array>("/ublox_driver/iono_params",1,ionoparam_cb);
-    ros::Subscriber receiver_lla_sub=nh.subscribe<sensor_msgs::NavSatFix>("/ublox_driver/receiver_lla",1,reclla_cb);
+    ros::Subscriber ephem_sub=nh.subscribe<gnss_comm::GnssEphemMsg>("/ublox_driver/ephem",100,ephem_cb);
+    ros::Subscriber gloephem_sub=nh.subscribe<gnss_comm::GnssGloEphemMsg>("/ublox_driver/glo_ephem",100,gloephem_cb);
+    ros::Subscriber iono_param_sub=nh.subscribe<gnss_comm::StampedFloat64Array>("/ublox_driver/iono_params",100,ionoparam_cb);
+    ros::Subscriber receiver_lla_sub=nh.subscribe<sensor_msgs::NavSatFix>("/ublox_driver/receiver_lla",100,reclla_cb);
     
     //create another thread for gnss meassurement callback function
     ros::NodeHandle nh_second;
