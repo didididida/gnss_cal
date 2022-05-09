@@ -2,6 +2,7 @@
 #include "imu_subscriber.h"
 #include "gnss_subscriber.h"
 #include "particle_filter.h"
+#include "gps_publisher.h"
 
 using namespace lidar_localization;
 
@@ -14,6 +15,9 @@ int main(int argc, char *argv[]){
     std::shared_ptr<PLANEsubscriber>plane_sub_ptr = std::make_shared<PLANEsubscriber>(nh,"/planecheck/planes_coefficient",10000);
     std::shared_ptr<SATSubscriber>sat_sub_ptr = std::make_shared<SATSubscriber>(nh,"/gnss_post_cal",10000);
     
+    std::shared_ptr<gps_publisher>gps_pub_ptr = std::make_shared<gps_publisher>(nh,"/post_gps","aft_mapped",100);
+
+
     std::deque<GNSSdata>gnss_data_buff;
     std::deque<IMUData>imu_data_buff;
     std::deque<ALL_plane>plane_data_buff;
@@ -65,8 +69,15 @@ int main(int argc, char *argv[]){
         Eigen::Vector3d post_pos;
         post_pos = PF.updateWeights(all_plane_data,all_sat_data);
         
-        std::cout<<std::setprecision(9)<<post_pos[0]<<"---"<<post_pos[1]<<std::endl;;
-        
+        GNSSdata data_pub;
+        data_pub.altitude = post_pos[2];
+        data_pub.longitude = post_pos[1];
+        data_pub.latitude = post_pos[0];
+        data_pub.service = gnss_data.service;
+        data_pub.status = gnss_data.status;
+        data_pub.time = gnss_data.time;
+        gps_pub_ptr->Publish(data_pub);
+        //std::cout<<std::setprecision(9)<<post_pos[0]<<"---"<<post_pos[1]<<std::endl;;
        }
     } 
     return 0;
