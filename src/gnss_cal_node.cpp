@@ -29,7 +29,6 @@ Eigen::Vector3d pos_lla;
 std::unordered_map<int,std::pair<Eigen::Vector3d,double>>ref_map;
 
 ros::Publisher pub;
-
 void inputEphem(gnss_comm::EphemBasePtr ephem_ptr){
     //tansform into second
     double toe = gnss_comm::time2sec(ephem_ptr->toe);
@@ -83,7 +82,8 @@ void rangemeas_cb(const gnss_comm::GnssMeasMsgConstPtr &meas_msg){
 
     std::vector<gnss_comm::ObsPtr> gnss_meas = gnss_comm::msg2meas(meas_msg);
     gnss_cal::gnssCal msg;
-    msg.header.stamp = ros::Time::now();
+    msg.header.stamp = ros::Time(gnss_comm::time2sec(gnss_meas[0]->time));
+    msg.header.frame_id = "aft_mapped";
     Eigen::Vector3d pos_ecef;
     {
         std::shared_lock lock(pos_mu);

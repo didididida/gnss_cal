@@ -33,4 +33,33 @@ namespace lidar_localization{
         }
         buff_mutex_.unlock();
     }
+
+  bool ALL_sat::SyncData(std::deque<ALL_sat>& UnsyncedData, std::deque<ALL_sat>& SyncedData, double sync_time)
+  {
+        while (UnsyncedData.size() >= 2) {
+        if (UnsyncedData.front().time > sync_time) 
+            return false;
+        if (UnsyncedData.at(1).time < sync_time) {
+            UnsyncedData.pop_front();
+            continue;
+        }
+        if (sync_time - UnsyncedData.front().time > 0.2) {
+            UnsyncedData.pop_front();
+            break;
+        }
+        
+        if (UnsyncedData.at(1).time - sync_time > 0.2) {
+            UnsyncedData.pop_front();
+            break;
+        }
+        break;
+    }
+        if (UnsyncedData.size() < 2)
+        return false;
+        
+        //no interpolation for satellite info.
+        SyncedData.push_back(UnsyncedData.front());
+        return true;
+  }
+
 }

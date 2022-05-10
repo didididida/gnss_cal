@@ -23,6 +23,7 @@ int main(int argc, char *argv[]){
     std::deque<ALL_plane>plane_data_buff;
     std::deque<ALL_sat>sat_data_buff;
 
+
     ros::Rate rate(10);
     while(ros::ok()){
         ros::spinOnce();

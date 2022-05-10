@@ -160,7 +160,9 @@ public:
     int original_size(cloud->height*cloud->width);
     int n_planes(0);
     gnss_cal::detect_planes planes_msg;
-    planes_msg.header.stamp = ros::Time::now();
+    planes_msg.header.stamp.sec = msg->header.stamp.sec + 1651246016;
+    planes_msg.header.stamp.nsec = msg->header.stamp.nsec;
+    planes_msg.header.frame_id = "aft_mapped";
    
     // To segment multi-planes in point cloud
     while(cloud->height*cloud->width>=_min_percentage*original_size/100){
