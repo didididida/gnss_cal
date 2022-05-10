@@ -309,27 +309,42 @@ Eigen::Vector3d ParticleFilter::updateWeights(const ALL_plane &planes, const ALL
             sum_error += error;
         }
         //avr_error = sum_error/sat.size();
-        id_error[p.id]=sum_error;
+        id_error[p.id]=sum_error / sat.sats.size();
+        std::cout<<sum_error/sat.sats.size()<<std::endl;
         
     }
         
         //assign weight for all particles based on its error.
         //Gaussain distrbution and maen believed to be zero, variation is 0.5
         double sum_weight = 0.0;
+        double max_w = 0.0;
+        int max_id = 0;
         for(auto &p:particles){
         p.weight = exp(-pow(id_error[p.id],2)/pow(SIGMA_P,2));
+        if(p.weight>=max_w){
+            max_w = p.weight;
+            max_id = p.id;
+        }
         sum_weight += p.weight;
         }
         
         //calculate average position data
         Eigen::Vector3d avr_pos;
         avr_pos.setZero();
+        //indicator to get max_weight particle or average particle
+        bool max_value = true;
+        if(max_value ==true){
+            avr_pos.x()=particles[max_id].p_ecef.x();
+            avr_pos.y()=particles[max_id].p_ecef.y();
+            avr_pos.z()=particles[max_id].p_ecef.z();
+        }
+        else{
         for(const auto &p :particles){
         avr_pos.x() += p.p_ecef.x() * (p.weight/sum_weight);
         avr_pos.y() += p.p_ecef.y() * (p.weight/sum_weight);
         avr_pos.z() += p.p_ecef.z() * (p.weight/sum_weight);
         }
-    
+        }
    
     Eigen::Vector3d result;
     result = gnss_comm::ecef2geo(avr_pos);

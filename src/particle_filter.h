@@ -58,7 +58,7 @@ private:
 
     Eigen::Matrix<float,3,3> C_N2B;
     // variation of pseudorange's error
-    double SIGMA_P = 100;
+    double SIGMA_P = 30;
 
     //quoternion
     Eigen::Matrix<float,4,1> q;
