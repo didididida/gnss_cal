@@ -19,7 +19,11 @@ find_package(catkin REQUIRED COMPONENTS
   eigen_conversions
   message_filters
   std_srvs
+  dynamic_reconfigure
+)
 
+generate_dynamic_reconfigure_options(
+    cfg/algorithmParameters.cfg
 )
 
 file(GLOB_RECURSE message_files ${PROJECT_SOURCE_DIR}/msg/*.msg)
