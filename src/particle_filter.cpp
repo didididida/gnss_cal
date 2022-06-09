@@ -116,7 +116,16 @@ constexpr double EARTH_RADIUS = 6378137.0;
         return f2;
 }
 
-
+double get_earth_omg(const std::string &sys){
+    if(sys == "glo"){
+        return EARTH_OMG_GLO;
+        }else if(sys =="bds"){
+        return EARTH_OMG_BDS;
+        }else if(sys == "gps"||sys=="gla"){
+        return EARTH_OMG_GPS;
+    }  
+    return 0;
+}
 
 
 ParticleFilter::ParticleFilter(const Eigen::Matrix<float,4,1>&q, const Eigen::Vector3d &pos_lla){
@@ -132,11 +141,11 @@ ParticleFilter::ParticleFilter(const Eigen::Matrix<float,4,1>&q, const Eigen::Ve
 // in enu coordinate system, scatter particles in 3D
 void ParticleFilter::init_pf(){
     //particles.resize(num_particles);
-    for(int i=0;i<7;i++){
-        for(int j=0;j<7;j++){
+    for(int i=0;i<13;i++){
+        for(int j=0;j<13;j++){
             enu_p.push_back({grid[i],grid[j],0});
-            enu_p.push_back({grid[i],grid[j],-2});
-            enu_p.push_back({grid[i],grid[j],2});
+            enu_p.push_back({grid[i],grid[j],-3});
+            enu_p.push_back({grid[i],grid[j],3});
         }
     }
     is_initialized = true;
@@ -166,7 +175,7 @@ Eigen::Vector3d ParticleFilter::updateWeights(const ALL_plane &planes, const ALL
 
     //hashmap to store estimated psudorange
     std::unordered_map<int,double> id_error;
-
+    double min_error = DBL_MAX;
     /*for each particle do ray-tracing process*/
     for (const auto &p :particles){
 
@@ -201,10 +210,17 @@ Eigen::Vector3d ParticleFilter::updateWeights(const ALL_plane &planes, const ALL
                 max_ele = azel[1];
                 Eigen::Vector3d tmp;
                 tmp = sat_ecef - ecef_p;
-                ref_rcv_clock = sat.sats[i].psr-sat.sats[i].mp - tmp.norm();
+                
+                //earth rotation
+                double earth_omg = 0.0;
+                earth_omg = get_earth_omg(sat.sats[i].sys);
+                double psr_sagnac = earth_omg*(ecef_p[1]*sat_ecef[0]-sat_ecef[1]*ecef_p[0])/LIGHT_SPEED;
+
+                ref_rcv_clock = sat.sats[i].psr-tmp.norm();
                 ref_index = i;
             }
         }
+
         
         /*For each satellite do ray-tracing*/
         for(int i=0;i<sat.sats.size();i++){
@@ -212,6 +228,8 @@ Eigen::Vector3d ParticleFilter::updateWeights(const ALL_plane &planes, const ALL
             //reference satellite's error is neglected
             if(i==ref_index)continue;
              
+            
+
             // estimated pseudorange
             double min_psr_estimated = DBL_MAX;
             double psr_estimated = 0.0;
@@ -223,6 +241,14 @@ Eigen::Vector3d ParticleFilter::updateWeights(const ALL_plane &planes, const ALL
             sat_ecef(1)=sat.sats[i].ecefY;
             sat_ecef(2)=sat.sats[i].ecefZ;
 
+            //effect by the earth rotation
+            double psr_sagnac = 0.0;
+            double earth_omg = 0.0;
+            earth_omg = get_earth_omg(sat.sats[i].sys);
+            psr_sagnac = earth_omg*(ecef_p[1]*sat_ecef[0]-sat_ecef[1]*ecef_p[0])/LIGHT_SPEED;
+          
+        
+           
             Eigen::Vector3d sat_enu;
             sat_enu = gnss_comm::ecef2enu(lla_p,sat_ecef);
 
@@ -283,6 +309,7 @@ Eigen::Vector3d ParticleFilter::updateWeights(const ALL_plane &planes, const ALL
                      );
                     
                     double lidar2wall = point2planedistance(p_lidar,p);
+                    
                     double ele = ele_all_sat[sat.sats[i].id];
 
                     
@@ -304,13 +331,16 @@ Eigen::Vector3d ParticleFilter::updateWeights(const ALL_plane &planes, const ALL
                     
                     }  
                 }
-           
+            
             double error = abs(min_psr_estimated-psr_mea);
             sum_error += error;
         }
         //avr_error = sum_error/sat.size();
         id_error[p.id]=sum_error / sat.sats.size();
-        std::cout<<sum_error/sat.sats.size()<<std::endl;
+        if(id_error[p.id]<min_error){
+            min_error = id_error[p.id];
+        }
+        std::cout<<sum_error / sat.sats.size() <<std::endl;
         
     }
         
@@ -320,7 +350,7 @@ Eigen::Vector3d ParticleFilter::updateWeights(const ALL_plane &planes, const ALL
         double max_w = 0.0;
         int max_id = 0;
         for(auto &p:particles){
-        p.weight = exp(-pow(id_error[p.id],2)/pow(SIGMA_P,2));
+        p.weight = exp(-pow(id_error[p.id]-min_error,2)/pow(SIGMA_P,2));
         if(p.weight>=max_w){
             max_w = p.weight;
             max_id = p.id;
@@ -332,7 +362,7 @@ Eigen::Vector3d ParticleFilter::updateWeights(const ALL_plane &planes, const ALL
         Eigen::Vector3d avr_pos;
         avr_pos.setZero();
         //indicator to get max_weight particle or average particle
-        bool max_value = true;
+        bool max_value = false;
         if(max_value ==true){
             avr_pos.x()=particles[max_id].p_ecef.x();
             avr_pos.y()=particles[max_id].p_ecef.y();

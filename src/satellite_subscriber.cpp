@@ -16,6 +16,7 @@ namespace lidar_localization{
             ss.ecefX = i.ecefX;
             ss.ecefY = i.ecefY;
             ss.ecefZ = i.ecefZ;
+            ss.sys = i.sys;
             ss.id = i.sat;
             ss.mp = i.mp;
             ss.psr = i.psr;

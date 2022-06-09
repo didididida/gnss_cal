@@ -17,9 +17,12 @@
 #include "gnss_cal/gnssCal.h"
 #include "gnss_cal/gnssToU.h"
 
+
 #define GNSS_ELEVATION_THRESHOLD 15
 std::shared_mutex iono_mu; //mutex for ionosphere
 std::shared_mutex pos_mu;
+
+std::unordered_map<int,double>record;
 
 std::unordered_map<uint32_t,std::vector<gnss_comm::EphemBasePtr>>sat2ephem;//ephemris map
 std::unordered_map<uint32_t,std::map<double,size_t>>sat2time_index;
@@ -97,7 +100,7 @@ void rangemeas_cb(const gnss_comm::GnssMeasMsgConstPtr &meas_msg){
        
         //identify satellites type
         uint32_t sys = gnss_comm::satsys(obs->sat,NULL);
-
+         
         //only process gps/bds/gal/glo
         if(sys!=SYS_GPS&&sys!=SYS_BDS&&sys!=SYS_GAL&&sys!=SYS_GLO)
         continue;
@@ -106,7 +109,8 @@ void rangemeas_cb(const gnss_comm::GnssMeasMsgConstPtr &meas_msg){
         if(gnss_comm::satsys(obs->sat,NULL)==0)
         continue;
         if(obs->freqs.empty())continue;
-         
+
+        std::string sys_name ="";
 
         int freq_idx = -1;
         gnss_comm::L1_freq(obs,&freq_idx);
@@ -142,16 +146,19 @@ void rangemeas_cb(const gnss_comm::GnssMeasMsgConstPtr &meas_msg){
         double Mp = 0.0;
 
         if(sys==SYS_GPS){
+            sys_name = "gps";
             freq_2_min = FREQ2;
             freq_2_max = FREQ2;
         }else if(sys==SYS_BDS){
+            sys_name = "bds";
             freq_2_min = FREQ2_BDS;
             freq_2_max = FREQ2_BDS;
         }else if(sys ==SYS_GAL){
+            sys_name = "gal";
             freq_2_min = FREQ5;
             freq_2_max = FREQ5;
         } else if (sys == SYS_GLO)
-        {
+        {  sys_name = "glo";
            freq_2_min = FREQ2_GLO - 7 * DFRQ2_GLO;
            freq_2_max = FREQ2_GLO + 6 * DFRQ2_GLO;
         }
@@ -166,7 +173,7 @@ void rangemeas_cb(const gnss_comm::GnssMeasMsgConstPtr &meas_msg){
                     freq2_idx = i;
             }
         }
-
+      
         if(freq2_idx<0)
         {
             ROS_INFO("No frequence L2");
@@ -182,11 +189,16 @@ void rangemeas_cb(const gnss_comm::GnssMeasMsgConstPtr &meas_msg){
         //Mp here includes multipath error and noise
         if(CP_1!=0&&CP_2!=0)
         Mp = obs->psr[freq_idx]-CP_1 + 2* a*(CP_1-CP_2);
-        ROS_INFO("Multipath: %f",Mp);
         
+        if(obs->sat == 46) Mp=0;
+        
+        if(obs->sat == 27) Mp -= 3671.971736/208;
+        if(obs->sat == 39) Mp -= 1725.940494/200;
+        if(obs->sat == 10) Mp -= 489.966076/139;
+        if(obs->sat == 8)  Mp -= 162.195664/155;
+
         //dual-frequency to calculate ionosphere delay
         iono_delay = a*(obs->psr[freq_idx]-obs->psr[freq2_idx]);
-        
         }
         
         double obs_time = gnss_comm::time2sec(obs->time);
@@ -233,7 +245,7 @@ void rangemeas_cb(const gnss_comm::GnssMeasMsgConstPtr &meas_msg){
         trop_delay = gnss_comm::calculate_trop_delay(obs->time,rcv_lla,azel);
         
         //if no dual-frequency, use klobuchar model to estimate iono_delay
-        if(freq2_idx<0)
+        if(freq2_idx<0||iono_delay==0)
         {
             std::shared_lock lock(iono_mu);
             iono_delay = gnss_comm::calculate_ion_delay(obs->time,last_iono_param,rcv_lla,azel);
@@ -246,6 +258,7 @@ void rangemeas_cb(const gnss_comm::GnssMeasMsgConstPtr &meas_msg){
         //eliminate the estimated mulipath error
         gnss_cal::gnssToU submsg;
         submsg.CN0 = obs->CN0;
+        submsg.sys = sys_name;
         submsg.psr = psr;
         submsg.sat = obs->sat;
         submsg.mp = Mp;

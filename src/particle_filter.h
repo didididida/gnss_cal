@@ -58,12 +58,12 @@ private:
 
     Eigen::Matrix<float,3,3> C_N2B;
     // variation of pseudorange's error
-    double SIGMA_P = 30;
+    double SIGMA_P = 0.8;
 
     //quoternion
     Eigen::Matrix<float,4,1> q;
    
-    std::vector<double>grid={-6.0,-4.0,-2.0,0.0,2.0,4.0,6.0};
+    std::vector<double>grid={-12,-10,-8,-6-4,-2,0,2,4,6,8,10,12};
     std::vector<Eigen::Vector3d> enu_p;
     
     

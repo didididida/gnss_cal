@@ -16,6 +16,7 @@ class Single_sat{
     double CN0 = 0.0; 
     double psr = 0.0;
     double mp = 0.0;
+    std::string sys = "";
     double ecefX = 0.0;
     double ecefY = 0.0;
     double ecefZ = 0.0;

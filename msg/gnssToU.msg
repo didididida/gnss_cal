@@ -1,5 +1,6 @@
 #from one single satellite
 uint32 sat         # satellite ID
+string sys
 float64[] CN0       # carrier-to-noise density ratio (signal strength) [dB-Hz]
 float64 psr         # pseudorange without ionosphere/troposphere error
 float64 mp          # multipath

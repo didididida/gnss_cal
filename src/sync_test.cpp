@@ -38,10 +38,14 @@ bool sync_data::readData(){
     sat_sub_ptr->ParseData(unsynced_sat_);
     gnss_sub_ptr->ParseData(unsynced_gnss_);
     
-    
+    while(!plane_data_buff.empty()&&plane_data_buff.front().planes.size()<3)
+    {
+        plane_data_buff.pop_front();
+    }
+
     if(plane_data_buff.size()==0)
     return false;
-
+    
     double cloud_time = plane_data_buff.front().time;
     
     bool valid_imu = IMUData::SyncData(unsynced_imu_, imu_data_buff, cloud_time);

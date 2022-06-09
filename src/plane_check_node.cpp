@@ -3,6 +3,7 @@
 #include <ros/publisher.h>
 #include <sensor_msgs/PointCloud2.h>
 #include <dynamic_reconfigure/server.h>
+#include "gnss_cal/algorithmParametersConfig.h"
 
 //PCL
 #include <pcl_ros/point_cloud.h>
@@ -63,6 +64,10 @@ public:
     planeFilter(ros::NodeHandle nh):_nh(nh){
          initialize();
     }
+    
+    void updateParameters(gnss_cal::algorithmParametersConfig& config, uint32_t level){
+        threshold=config.threshold;
+    }
     void initialize(){
     // get node name
     _name = ros::this_node::getName();
@@ -77,14 +82,23 @@ public:
     _pub_inliers = _nh.advertise< sensor_msgs::PointCloud2 >("inliers",2);
     _pub_coefficient = _nh.advertise<gnss_cal::detect_planes>("planes_coefficient",1);
     
+    //dynamic config
+    ros::param::param<double>("~threshold",threshold,0);
+    drCallback = boost::bind( &planeFilter::updateParameters, this, _1, _2);
+    dRserver.setCallback(drCallback);
     
+
     // create color pallet
     createColors();
 
     ROS_INFO("%s: node initialized",_name.c_str());
 
     }
+      
+      
+    
    
+     
     void pointCloudCb(const sensor_msgs::PointCloud2::ConstPtr &msg){
      
     //convert to pcl point cloud
@@ -173,7 +187,7 @@ public:
         // Check result
         if (inliers->indices.size() == 0)
             break;
-        if (inliers->indices.size() >= 0.075 * original_size)
+        if (inliers->indices.size() >= threshold *0.01 * original_size)
              small_plane = false;
         else small_plane = true;
         
@@ -281,7 +295,7 @@ private:
     message_filters::Subscriber<sensor_msgs::PointCloud2>*_sub_pointcloud;
     tf::MessageFilter<sensor_msgs::PointCloud2>*_sub_tf;
     tf::TransformListener tf_listener;
-
+    
 
 
     // Algorithm parameters
@@ -290,6 +304,11 @@ private:
 
     // Colors
     std::vector<Color> colors;
+    
+    //dynamic config
+    double threshold;
+     dynamic_reconfigure::Server<gnss_cal::algorithmParametersConfig> dRserver;
+    dynamic_reconfigure::Server<gnss_cal::algorithmParametersConfig>::CallbackType drCallback;
 };
 
 int main(int argc,char*argv[]){
