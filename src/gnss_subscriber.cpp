@@ -60,6 +60,7 @@ void GNSSSubscriber::msg_callback(const sensor_msgs::NavSatFixConstPtr& nav_sat_
     data.service = nav_sat_fix_ptr->status.service;
     new_gnss_data_.push_back(data);
     buff_mutex_.unlock();
+    
 }
 
 void GNSSSubscriber::ParseData(std::deque<GNSSdata>& gnss_data_buff){

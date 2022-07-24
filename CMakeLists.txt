@@ -77,7 +77,8 @@ add_executable(test_node ${PROJECT_SOURCE_DIR}/src/test.cpp
                    ${PROJECT_SOURCE_DIR}/src/gnss_subscriber.cpp
                    ${PROJECT_SOURCE_DIR}/src/imu_subscriber.cpp
                    ${PROJECT_SOURCE_DIR}/src/particle_filter.cpp
-                   ${PROJECT_SOURCE_DIR}/src/gps_publisher.cpp)
+                   ${PROJECT_SOURCE_DIR}/src/gps_publisher.cpp
+                   ${PROJECT_SOURCE_DIR}/src/imu_publisher.cpp)
 target_link_libraries(test_node ${catkin_LIBRARIES}  ${EIGEN3_INCLUDE_DIR})
 
 add_executable(sync_node ${PROJECT_SOURCE_DIR}/src/sync_node.cpp 
@@ -87,5 +88,6 @@ add_executable(sync_node ${PROJECT_SOURCE_DIR}/src/sync_node.cpp
                    ${PROJECT_SOURCE_DIR}/src/gnss_subscriber.cpp
                    ${PROJECT_SOURCE_DIR}/src/imu_subscriber.cpp
                    ${PROJECT_SOURCE_DIR}/src/particle_filter.cpp
-                   ${PROJECT_SOURCE_DIR}/src/gps_publisher.cpp)
+                   ${PROJECT_SOURCE_DIR}/src/gps_publisher.cpp
+                   ${PROJECT_SOURCE_DIR}/src/imu_publisher.cpp)
 target_link_libraries(sync_node ${catkin_LIBRARIES}  ${EIGEN3_INCLUDE_DIR})

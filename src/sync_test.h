@@ -8,6 +8,7 @@
 #include "gnss_subscriber.h"
 #include "gps_publisher.h"
 #include "particle_filter.h"
+#include "imu_publisher.h"
 
 namespace lidar_localization{
 
@@ -28,6 +29,7 @@ class sync_data{
      
 
     std::shared_ptr<gps_publisher>gps_pub_ptr;
+    std::shared_ptr<imu_publisher>imu_pub_ptr;
 
     std::deque<GNSSdata>gnss_data_buff;
     std::deque<IMUData>imu_data_buff;

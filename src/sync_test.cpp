@@ -10,6 +10,7 @@ sync_data::sync_data(ros::NodeHandle& nh, std::string cloud_topic){
     sat_sub_ptr = std::make_shared<SATSubscriber>(nh,"/gnss_post_cal",10000);
    
     gps_pub_ptr = std::make_shared<gps_publisher>(nh,"/post_gps","aft_mapped",100);
+    imu_pub_ptr = std::make_shared<imu_publisher>(nh,"/post_imu","aft_mapped",100);
 }
 
 bool sync_data::run(){
@@ -20,7 +21,7 @@ bool sync_data::run(){
       if(!validData())
       continue;
       publishData();
-      std::cout<<"------publish-ok-----"<<std::endl;
+      //std::cout<<"------publish-ok-----"<<std::endl;
       //do something
     }
     return true;
@@ -83,7 +84,8 @@ bool sync_data::validData(){
      current_sat = sat_data_buff.front();
      current_imu = imu_data_buff.front();
      current_planes = plane_data_buff.front();
-
+  
+   
 
      gnss_data_buff.pop_front();
      sat_data_buff.pop_front();
@@ -110,6 +112,14 @@ bool sync_data::publishData(){
         Eigen::Vector3d post_pos;
         post_pos = PF.updateWeights(current_planes,current_sat);
         
+        Eigen::Vector3d ecef_ref{4018477,425661,4918434};
+        Eigen::Vector3d lla_ref=gnss_comm::ecef2geo(ecef_ref);
+        Eigen::Vector3d ecef = gnss_comm::geo2ecef(post_pos);
+        ecef_ref=ecef_ref-ecef;
+        Eigen::Vector3d enu;
+        enu = gnss_comm::ecef2enu(lla_ref,ecef_ref);
+        //std::cout<<enu[0]<<std::endl;
+
         GNSSdata data_pub;
         data_pub.altitude = post_pos[2];
         data_pub.longitude = post_pos[1];
@@ -118,5 +128,7 @@ bool sync_data::publishData(){
         data_pub.status = current_gnss.status;
         data_pub.time = current_gnss.time;
         gps_pub_ptr->Publish(data_pub);
+        
+        //imu_pub_ptr->Publish(current_imu);
 }
 }

@@ -141,11 +141,11 @@ ParticleFilter::ParticleFilter(const Eigen::Matrix<float,4,1>&q, const Eigen::Ve
 // in enu coordinate system, scatter particles in 3D
 void ParticleFilter::init_pf(){
     //particles.resize(num_particles);
-    for(int i=0;i<13;i++){
-        for(int j=0;j<13;j++){
+    for(int i=0;i<25;i++){
+        for(int j=0;j<25;j++){
             enu_p.push_back({grid[i],grid[j],0});
-            enu_p.push_back({grid[i],grid[j],-3});
-            enu_p.push_back({grid[i],grid[j],3});
+            //enu_p.push_back({grid[i],grid[j],-3});
+            //enu_p.push_back({grid[i],grid[j],3});
         }
     }
     is_initialized = true;
@@ -198,6 +198,19 @@ Eigen::Vector3d ParticleFilter::updateWeights(const ALL_plane &planes, const ALL
         //hashmap to store elevation for all satellites
         std::unordered_map<int,double>ele_all_sat;
 
+        std::unordered_map<std::string,double>searchMaxSat;
+        searchMaxSat.insert({"gps",0});
+        searchMaxSat.insert({"bds",0});
+        searchMaxSat.insert({"gal",0});
+        searchMaxSat.insert({"glo",0});
+        
+        std::unordered_map<std::string,double>RefRcvClock;
+        RefRcvClock.insert({"gps",0});
+        RefRcvClock.insert({"bds",0});
+        RefRcvClock.insert({"gal",0});
+        RefRcvClock.insert({"glo",0});
+
+
         for(int i=0;i<sat.sats.size();i++){
             double azel[2] = {0, M_PI/2.0};
             Eigen::Vector3d sat_ecef;
@@ -206,8 +219,8 @@ Eigen::Vector3d ParticleFilter::updateWeights(const ALL_plane &planes, const ALL
             sat_ecef(2)=sat.sats[i].ecefZ;
             gnss_comm::sat_azel(ecef_p,sat_ecef,azel);
             ele_all_sat[sat.sats[i].id] = azel[1];
-            if(azel[1]>max_ele){
-                max_ele = azel[1];
+            if(azel[1]>searchMaxSat[sat.sats[i].sys]){
+                searchMaxSat[sat.sats[i].sys] = azel[1];
                 Eigen::Vector3d tmp;
                 tmp = sat_ecef - ecef_p;
                 
@@ -216,11 +229,11 @@ Eigen::Vector3d ParticleFilter::updateWeights(const ALL_plane &planes, const ALL
                 earth_omg = get_earth_omg(sat.sats[i].sys);
                 double psr_sagnac = earth_omg*(ecef_p[1]*sat_ecef[0]-sat_ecef[1]*ecef_p[0])/LIGHT_SPEED;
 
-                ref_rcv_clock = sat.sats[i].psr-tmp.norm();
+                RefRcvClock[sat.sats[i].sys] = sat.sats[i].psr-tmp.norm();
                 ref_index = i;
             }
         }
-
+        
         
         /*For each satellite do ray-tracing*/
         for(int i=0;i<sat.sats.size();i++){
@@ -288,10 +301,10 @@ Eigen::Vector3d ParticleFilter::updateWeights(const ALL_plane &planes, const ALL
                 //Calculate The NLOS Psudorange
                 // If satellite is not blocked by all planes
                 if(!is_blocked){
-                 min_psr_estimated = d.norm()+ref_rcv_clock;
+                 min_psr_estimated = d.norm()+RefRcvClock[sat.sats[i].sys];
         
                 }else{
-                
+                  
                     for(int j=0;j<planes.planes.size();j++){
                     
                     //block by this plane skip it
@@ -315,13 +328,13 @@ Eigen::Vector3d ParticleFilter::updateWeights(const ALL_plane &planes, const ALL
                     
                    
                     if(ele==M_PI/2.0){
-                    psr_estimated = d.norm()+ref_rcv_clock;
+                    psr_estimated = d.norm()+RefRcvClock[sat.sats[i].sys];
                     }
                     else{
                     double gama1 = lidar2wall/(sin(M_PI/2.0-ele));
                     double gama2 = gama1 * cos(2*ele);
                     double delta_psd = gama1 + gama2;
-                    psr_estimated = delta_psd+d.norm()+ref_rcv_clock;
+                    psr_estimated = delta_psd+d.norm()+RefRcvClock[sat.sats[i].sys];
                     }  
                    
                     if(psr_estimated<min_psr_estimated)
@@ -335,12 +348,13 @@ Eigen::Vector3d ParticleFilter::updateWeights(const ALL_plane &planes, const ALL
             double error = abs(min_psr_estimated-psr_mea);
             sum_error += error;
         }
+
         //avr_error = sum_error/sat.size();
         id_error[p.id]=sum_error / sat.sats.size();
+      
         if(id_error[p.id]<min_error){
             min_error = id_error[p.id];
         }
-        std::cout<<sum_error / sat.sats.size() <<std::endl;
         
     }
         

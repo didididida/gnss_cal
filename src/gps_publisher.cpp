@@ -9,7 +9,8 @@ gps_publisher::gps_publisher(ros::NodeHandle &nh, std::string topic_name,std::st
 
 void gps_publisher::Publish(GNSSdata gnss_data){
     sensor_msgs::NavSatFix nav;
-    ros::Time ros_time((float)gnss_data.time);
+    ros::Time ros_time((double)gnss_data.time);
+    nav.header.stamp=ros_time;
     nav.altitude = gnss_data.altitude;
     nav.latitude = gnss_data.latitude;
     nav.longitude = gnss_data.longitude;

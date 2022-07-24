@@ -92,10 +92,10 @@ void rangemeas_cb(const gnss_comm::GnssMeasMsgConstPtr &meas_msg){
         std::shared_lock lock(pos_mu);
         pos_ecef = gnss_comm::geo2ecef(pos_lla);
     }
-   
+
     // lla position
     Eigen::Vector3d rcv_lla = gnss_comm::ecef2geo(pos_ecef);
-    
+  
     for(auto obs:gnss_meas){
        
         //identify satellites type
@@ -215,7 +215,7 @@ void rangemeas_cb(const gnss_comm::GnssMeasMsgConstPtr &meas_msg){
         }
 
         if(ephem_time>=EPH_VALID_SECONDS){
-            std::cout<<"ephemris not valid"<<std::endl;
+            //std::cout<<"ephemris not valid"<<std::endl;
         }
 
         const gnss_comm::EphemBasePtr &best_ephem=sat2ephem.at(obs->sat).at(ephem_index);
@@ -237,6 +237,7 @@ void rangemeas_cb(const gnss_comm::GnssMeasMsgConstPtr &meas_msg){
         gnss_comm::sat_azel(pos_ecef,sat_ecef,azel);
         //if elevation angle is small than threshold, discard
         if(azel[1]<GNSS_ELEVATION_THRESHOLD*M_PI/180.0){
+           
             continue;
         }
         
@@ -267,6 +268,7 @@ void rangemeas_cb(const gnss_comm::GnssMeasMsgConstPtr &meas_msg){
         submsg.ecefZ = sat_ecef[2];
         msg.meas.push_back(submsg);
     }
+    
     msg.latitude = rcv_lla[0];
     msg.longitude =rcv_lla[1];
     msg.altitude = rcv_lla[2];

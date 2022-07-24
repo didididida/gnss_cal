@@ -31,7 +31,7 @@
 #include <tf/message_filter.h>
 #include <message_filters/time_synchronizer.h>
 #include <message_filters/subscriber.h>
-
+#include <stdio.h>
 
 class Color{
 private:
@@ -76,6 +76,7 @@ public:
    
     //_subs = _nh.subscribe("/laser_cloud_map",1,&planeFilter::pointCloudCb,this);
     _sub_pointcloud = new message_filters::Subscriber<sensor_msgs::PointCloud2>(_nh,"/laser_cloud_map",100);
+    //_sub_pointcloud = new message_filters::Subscriber<sensor_msgs::PointCloud2>(_nh,"/velodyne_cloud_registered",100);
     _sub_tf = new tf::MessageFilter<sensor_msgs::PointCloud2>(*_sub_pointcloud,tf_listener,"/camera_init",100);
     _sub_tf->registerCallback(boost::bind(&planeFilter::pointCloudCb, this, _1));
 
@@ -104,9 +105,10 @@ public:
     //convert to pcl point cloud
     pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_msg (new pcl::PointCloud<pcl::PointXYZ>);
     pcl::fromROSMsg(*msg,*cloud_msg);
+
     ROS_INFO("%s: new ponitcloud (%i,%i)(%zu)",_name.c_str(),cloud_msg->width,cloud_msg->height,
     cloud_msg->size());
-
+   
     //filter cloud
     pcl::PassThrough<pcl::PointXYZ> pass;
     pass.setInputCloud(cloud_msg);
@@ -177,7 +179,8 @@ public:
     planes_msg.header.stamp.sec = msg->header.stamp.sec + 1651246016;
     planes_msg.header.stamp.nsec = msg->header.stamp.nsec;
     planes_msg.header.frame_id = "aft_mapped";
-   
+
+
     // To segment multi-planes in point cloud
     while(cloud->height*cloud->width>=_min_percentage*original_size/100){
         
