@@ -109,7 +109,7 @@ public:
     ROS_INFO("%s: new ponitcloud (%i,%i)(%zu)",_name.c_str(),cloud_msg->width,cloud_msg->height,
     cloud_msg->size());
    
-    //filter cloud
+    //filter point cloud too far away
     pcl::PassThrough<pcl::PointXYZ> pass;
     pass.setInputCloud(cloud_msg);
     pass.setFilterFieldName ("z");
@@ -140,7 +140,7 @@ public:
     pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_world (new pcl::PointCloud<pcl::PointXYZ>);
     sor.filter(*cloud_world);
 
-    
+    //transform point clouc into body frame    
     tf::StampedTransform WorldToSensorTF;
     try
     {

@@ -190,12 +190,13 @@ void rangemeas_cb(const gnss_comm::GnssMeasMsgConstPtr &meas_msg){
         if(CP_1!=0&&CP_2!=0)
         Mp = obs->psr[freq_idx]-CP_1 + 2* a*(CP_1-CP_2);
         
+        /*
         if(obs->sat == 46) Mp=0;
-        
         if(obs->sat == 27) Mp -= 3671.971736/208;
         if(obs->sat == 39) Mp -= 1725.940494/200;
         if(obs->sat == 10) Mp -= 489.966076/139;
         if(obs->sat == 8)  Mp -= 162.195664/155;
+        */
 
         //dual-frequency to calculate ionosphere delay
         iono_delay = a*(obs->psr[freq_idx]-obs->psr[freq2_idx]);
