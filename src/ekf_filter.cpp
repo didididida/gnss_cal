@@ -2,6 +2,8 @@
 #include <tf2/LinearMath/Quaternion.h>
 #include <angles/angles.h>
 #include <algorithm>
+#include <gnss_comm/gnss_utility.hpp>
+
 
 GpsImuVelFilter::GpsImuVelFilter(ros::NodeHandle &nh){
     //load config param
@@ -23,15 +25,15 @@ GpsImuVelFilter::GpsImuVelFilter(ros::NodeHandle &nh){
     
     //topics' name
     std::string gps_fix_topic, gps_vel_topic, imu_topic, mag_topic;
-    nh.param<std::string>("gps_fix_topic", gps_fix_topic, "/fix");
-    nh.param<std::string>("gps_vel_topic", gps_vel_topic, "/vel");
+    nh.param<std::string>("gps_fix_topic", gps_fix_topic, "/ublox_driver/receiver_lla");
+    nh.param<std::string>("gps_vel_topic", gps_vel_topic, "/ublox_driver/receiver_pvt");
     nh.param<std::string>("imu_topic", imu_topic, "/imu/data");
     nh.param<std::string>("mag_topic", mag_topic, "/mag");
 
     //publish rate
     int gps_publish_rate, imu_publish_rate, mag_publish_rate;
-    nh.param<int>("gps_publish_rate", gps_publish_rate, 10);
-    nh.param<int>("imu_publish_rate", imu_publish_rate, 200);
+    nh.param<int>("gps_publish_rate", gps_publish_rate, 1);
+    nh.param<int>("imu_publish_rate", imu_publish_rate, 50);
     nh.param<int>("mag_publish_rate", mag_publish_rate, 50);
 
     // Initialization ekf imu gps vel localizer.
@@ -106,10 +108,10 @@ void GpsImuVelFilter::ImuCallback(const sensor_msgs::ImuConstPtr& imu_msg_ptr){
 
 void GpsImuVelFilter::GpsPosCallback(const sensor_msgs::NavSatFixConstPtr& gps_msg_ptr){
     //check gps state;
-    if(gps_msg_ptr->status.status !=0){
-        ROS_WARN("WAIT FOR GPS SIGNAL");
-        return;
-    }
+    //if(gps_msg_ptr->status.status ==0){
+        //ROS_WARN("WAIT FOR GPS SIGNAL");
+       // return;
+    //}
     restore_.status = gps_msg_ptr->status;
     restore_.position_covariance_type = gps_msg_ptr->position_covariance_type;
     gps_link_name = gps_msg_ptr->header.frame_id;
@@ -121,16 +123,16 @@ void GpsImuVelFilter::GpsPosCallback(const sensor_msgs::NavSatFixConstPtr& gps_m
     ekfNav_ptr_->gpsPosDataUpdateEKF(gps_data_ptr);
 }
 
-void GpsImuVelFilter::GpsVelCallback(const geometry_msgs::TwistWithCovarianceStampedConstPtr &vel_msg_ptr){
+void GpsImuVelFilter::GpsVelCallback(const gnss_comm::GnssPVTSolnMsgConstPtr &vel_msg_ptr){
     gpsVelDataPtr gps_vel_data_ptr = std::make_shared<gpsVelData>();
-    gps_vel_data_ptr->vel_time = vel_msg_ptr->header.stamp.toSec();
+    //gps_vel_data_ptr->vel_time =ros::Time(gnss_comm::time2sec(vel_msg_ptr->time)).toSec();
     if (vel_tf_enu_to_ned == true) {
         std::tie(gps_vel_data_ptr->vN, gps_vel_data_ptr->vE, gps_vel_data_ptr->vD) = 
-                    FromEnuToNed(vel_msg_ptr->twist.twist.linear.x, vel_msg_ptr->twist.twist.linear.y, vel_msg_ptr->twist.twist.linear.z);
+                    FromEnuToNed(vel_msg_ptr->vel_n, vel_msg_ptr->vel_e, vel_msg_ptr->vel_d);
     } else {
-        gps_vel_data_ptr->vN = vel_msg_ptr->twist.twist.linear.x;
-        gps_vel_data_ptr->vE = vel_msg_ptr->twist.twist.linear.y;
-        gps_vel_data_ptr->vD = vel_msg_ptr->twist.twist.linear.z;
+        gps_vel_data_ptr->vN = vel_msg_ptr->vel_n;
+        gps_vel_data_ptr->vE = vel_msg_ptr->vel_e;
+        gps_vel_data_ptr->vD = vel_msg_ptr->vel_d;
     }
     ekfNav_ptr_->gpsVelDataUpdateEKF(gps_vel_data_ptr);
 }

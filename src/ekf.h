@@ -7,6 +7,7 @@
 #include <tuple>
 #include <mutex>
 #include <shared_mutex>
+#include "gnss_comm/GnssPVTSolnMsg.h"
 
 //acceleration due to gravity
 constexpr float G = 9.807f;

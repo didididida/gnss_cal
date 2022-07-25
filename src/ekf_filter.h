@@ -21,7 +21,7 @@ public:
    void ImuCallback(const sensor_msgs::ImuConstPtr& imu_msg_ptr);
    void MagCallback(const sensor_msgs::MagneticFieldPtr& mag_msg_ptr);
    void GpsPosCallback(const sensor_msgs::NavSatFixConstPtr& gps_msg_ptr);
-   void GpsVelCallback(const geometry_msgs::TwistWithCovarianceStampedConstPtr& vel_msg_ptr);
+   void GpsVelCallback(const gnss_comm::GnssPVTSolnMsgConstPtr& vel_msg_ptr);
 
 
 private:
