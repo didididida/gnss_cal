@@ -112,6 +112,7 @@ bool sync_data::publishData(){
         Eigen::Vector3d post_pos;
         post_pos = PF.updateWeights(current_planes,current_sat);
         
+        //initial position
         Eigen::Vector3d ecef_ref{4018477,425661,4918434};
         Eigen::Vector3d lla_ref=gnss_comm::ecef2geo(ecef_ref);
         Eigen::Vector3d ecef = gnss_comm::geo2ecef(post_pos);
